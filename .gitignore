@@ -1,2 +1,4 @@
 node_modules/
 www/
+push-apk.bat
+push-to-github.ps1
