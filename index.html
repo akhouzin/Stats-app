@@ -1,0 +1,324 @@
+﻿<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="CP Stats">
+<link rel="apple-touch-icon" href="logo.png">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400;1,600&family=Cinzel:wght@400;600;700&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<title>ERPGEN — Stats</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<link rel="stylesheet" href="./styles/stats.css">
+</head>
+<body>
+
+<div class="topbar">
+  <div>
+    <div class="topbar-title">ERPGEN</div>
+    <div class="topbar-sub">Statistiques</div>
+  </div>
+  <div class="topbar-time">
+    <div><span class="live-dot"></span><span id="live-status">Chargement…</span></div>
+    <div id="clock" style="margin-top:2px;"></div>
+  </div>
+  <div id="pending-banner" class="pending-banner"></div>
+</div>
+
+<div class="pages-wrap" id="pages-wrap">
+<div class="pages-slider" id="pages-slider">
+
+<!-- TODAY PAGE -->
+<div class="page" id="page-today">
+  <div id="today-loading" class="loading"><div class="spinner"></div><br>Chargement…</div>
+  <div id="today-content" style="display:none;">
+    <div class="kpi-grid">
+      <div class="kpi"><div class="kpi-label">Commandes</div><div class="kpi-value" id="t-orders">—</div><div class="kpi-sub">aujourd'hui</div></div>
+      <div class="kpi"><div class="kpi-label">Chiffre d'affaires</div><div class="kpi-value green" id="t-revenue">—</div><div class="kpi-sub">Dhs aujourd'hui</div></div>
+      <div class="kpi"><div class="kpi-label">Panier Moyen</div><div class="kpi-value" id="t-avg">—</div><div class="kpi-sub">Dhs / commande</div></div>
+      <div class="kpi"><div class="kpi-label">Articles vendus</div><div class="kpi-value" id="t-items">—</div><div class="kpi-sub">unités</div></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Dernières commandes</div>
+      <div id="t-recent" class="scroll-list"></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Par Serveur — Aujourd'hui</div>
+      <div id="t-servers"></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Rapport Barista — Aujourd'hui</div>
+      <div id="t-barista"></div>
+    </div>
+  </div>
+</div>
+
+<!-- RAPPORT DU JOUR PAGE -->
+<div class="page" id="page-rapport">
+  <div class="day-nav">
+    <button class="day-nav-btn" id="r-prev" onclick="changeDay(1)">‹</button>
+    <div>
+      <div class="day-label" id="r-day-label">—</div>
+      <div class="day-sub" id="r-day-sub"></div>
+    </div>
+    <button class="day-nav-btn" id="r-next" onclick="changeDay(-1)">›</button>
+  </div>
+  <div id="rapport-loading" class="loading"><div class="spinner"></div><br>Chargement…</div>
+  <div id="rapport-content" style="display:none;">
+    <div class="kpi-grid">
+      <div class="kpi"><div class="kpi-label">Commandes</div><div class="kpi-value" id="r-orders">—</div></div>
+      <div class="kpi"><div class="kpi-label">Total</div><div class="kpi-value green" id="r-total">—</div><div class="kpi-sub">Dhs</div></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Articles vendus</div>
+      <div id="r-items" class="scroll-list"></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Consommation</div>
+      <div id="r-consumption"></div>
+    </div>
+  </div>
+</div>
+
+<!-- REVENUE PAGE -->
+<div class="page" id="page-revenue">
+  <div id="revenue-loading" class="loading"><div class="spinner"></div><br>Chargement…</div>
+  <div id="revenue-content" style="display:none;">
+    <div class="card">
+      <div class="card-title">Analyse des performances</div>
+      <div id="rev-insights"></div>
+    </div>
+    <div class="card">
+      <div class="card-title">7 derniers jours</div>
+      <div class="chart-wrap"><canvas id="chart-week"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Ce mois — par jour</div>
+      <div class="chart-wrap" style="height:220px;"><canvas id="chart-month"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Résumé mensuel</div>
+      <div id="rev-monthly"></div>
+    </div>
+  </div>
+</div>
+
+
+<!-- INVENTAIRE PAGE -->
+<div class="page" id="page-inventaire">
+  <div class="inv-period-bar">
+    <button class="inv-period-btn active" onclick="setInvPeriod('today',this)">Jour</button>
+    <button class="inv-period-btn" onclick="setInvPeriod('week',this)">Semaine</button>
+    <button class="inv-period-btn" onclick="setInvPeriod('month',this)">Mois</button>
+  </div>
+  <div class="day-nav" style="margin-bottom:14px;">
+    <button class="day-nav-btn" id="inv-prev" onclick="changeInvOffset(1)">‹</button>
+    <div>
+      <div class="day-label" id="inv-period-label">—</div>
+    </div>
+    <button class="day-nav-btn" id="inv-next" onclick="changeInvOffset(-1)" disabled>›</button>
+  </div>
+  <div class="card" id="inv-totals-card">
+    <div class="card-title">Bilan Marchandises</div>
+    <div id="inv-totals"></div>
+  </div>
+  <div class="card">
+    <div class="card-title">Consommables — <span id="inv-cons-period" style="font-weight:400;color:var(--text-dim);"></span></div>
+    <div id="inv-consumables"></div>
+  </div>
+  <div class="card">
+    <div class="card-title">Stock Manuel — <span id="inv-man-period" style="font-weight:400;color:var(--text-dim);"></span></div>
+    <div id="inv-manual"></div>
+  </div>
+</div>
+
+<!-- SALAIRE PAGE -->
+<div class="page" id="page-salaire">
+
+  <!-- Month nav -->
+  <div class="day-nav" style="margin-bottom:12px;">
+    <button class="day-nav-btn" id="sal-prev" onclick="changeSalMonth(-1)">‹</button>
+    <div><div class="day-label" id="sal-month-label">—</div></div>
+    <button class="day-nav-btn" id="sal-next" onclick="changeSalMonth(1)">›</button>
+  </div>
+
+  <!-- Add staff bar -->
+  <div class="sal-top-bar">
+    <span style="font-family:'Cinzel',serif;font-size:10px;letter-spacing:2px;color:var(--text-dim);text-transform:uppercase;">Employés</span>
+    <button class="sal-add-btn" onclick="toggleSalForm()">+ Ajouter</button>
+  </div>
+
+  <!-- Add staff form (hidden) -->
+  <div class="sal-add-form" id="sal-add-form" style="display:none;">
+    <div style="font-family:'Cinzel',serif;font-size:10px;letter-spacing:1px;color:var(--green-dark);margin-bottom:6px;">NOUVEL EMPLOYÉ</div>
+    <div class="sal-form-row">
+      <input class="sal-text-input" id="sal-new-name" type="text" placeholder="Nom de l'employé">
+      <input class="inv-input" id="sal-new-rate" type="number" min="0" placeholder="Dhs/j" style="width:80px;">
+      <button class="refresh-btn" onclick="addSalStaff()" style="white-space:nowrap;">Ajouter</button>
+      <button class="sal-del-btn" onclick="toggleSalForm()" style="color:var(--text-dim);">Annuler</button>
+    </div>
+  </div>
+
+  <!-- Shared presence sheet -->
+  <div class="card" id="sal-sheet-card" style="display:none;">
+    <div class="card-title" id="sal-sheet-title">Présence</div>
+    <div class="sal-sheet-wrap">
+      <table class="sal-sheet-table" id="sal-sheet"></table>
+    </div>
+    <div class="sal-sheet-legend">
+      <div class="sal-leg-item"><span class="sal-leg-dot" style="background:#c8e6c9;"></span>Payé</div>
+      <div class="sal-leg-item"><span class="sal-leg-dot" style="background:#c5cae9;"></span>Avance</div>
+      <div class="sal-leg-item"><span class="sal-leg-dot" style="background:#ffcdd2;"></span>Absent</div>
+      <div class="sal-leg-item"><span style="font-size:9px;color:var(--text-dim);">Appuyer pour changer</span></div>
+    </div>
+  </div>
+
+
+</div>
+
+<!-- RECETTE PAGE -->
+<div class="page" id="page-recette">
+
+  <!-- Month nav -->
+  <div class="day-nav" style="margin-bottom:12px;">
+    <button class="day-nav-btn" id="rec-prev" onclick="changeRecMonth(-1)">‹</button>
+    <div><div class="day-label" id="rec-month-label">—</div></div>
+    <button class="day-nav-btn" id="rec-next" onclick="changeRecMonth(1)">›</button>
+  </div>
+
+  <!-- Add charge bar -->
+  <div class="sal-top-bar">
+    <span style="font-family:'Cinzel',serif;font-size:10px;letter-spacing:2px;color:var(--text-dim);text-transform:uppercase;">Charges</span>
+    <button class="sal-add-btn" onclick="toggleRecForm()">+ Ajouter</button>
+  </div>
+
+  <!-- Add charge form -->
+  <div class="sal-add-form" id="rec-add-form" style="display:none;">
+    <div style="font-family:'Cinzel',serif;font-size:10px;letter-spacing:1px;color:var(--green-dark);margin-bottom:6px;">NOUVELLE CHARGE</div>
+    <div class="sal-form-row">
+      <input class="sal-text-input" id="rec-new-name" type="text" placeholder="Nom de la charge">
+      <button class="refresh-btn" onclick="addCharge()" style="white-space:nowrap;">Ajouter</button>
+      <button class="sal-del-btn" onclick="toggleRecForm()" style="color:var(--text-dim);">Annuler</button>
+    </div>
+  </div>
+
+  <!-- Recette & Charges table -->
+  <div class="card" id="rec-sheet-card">
+    <div class="card-title" id="rec-sheet-title">Recette & Charges</div>
+    <div class="sal-sheet-wrap">
+      <table class="sal-sheet-table" id="rec-sheet"></table>
+    </div>
+  </div>
+
+</div>
+
+</div><!-- end pages-slider -->
+</div><!-- end pages-wrap -->
+
+<!-- RECETTE SUMMARY BAR -->
+<div class="rec-summary-bar" id="rec-summary-bar" style="display:none;">
+  <div id="rec-summary-card"></div>
+</div>
+
+<!-- DAY AMOUNT MODAL -->
+<div id="sal-hours-modal" style="display:none;position:fixed;inset:0;z-index:500;align-items:center;justify-content:center;">
+  <div class="sal-modal-backdrop" onclick="closeHoursModal()"></div>
+  <div class="sal-modal-box">
+    <div class="sal-modal-title">Montant du jour</div>
+    <div class="sal-modal-date" id="sal-modal-date"></div>
+    <!-- Status switcher -->
+    <div style="display:flex;gap:6px;justify-content:center;">
+      <button id="sms-blank"   onclick="setModalStatus(null)"      style="flex:1;padding:7px 4px;border-radius:8px;border:2px solid var(--border);font-size:11px;cursor:pointer;font-family:'Cinzel',serif;letter-spacing:0.5px;">—</button>
+      <button id="sms-paid"    onclick="setModalStatus('paid')"    style="flex:1;padding:7px 4px;border-radius:8px;border:2px solid var(--border);font-size:11px;cursor:pointer;font-family:'Cinzel',serif;letter-spacing:0.5px;color:#1b5e20;">Payé</button>
+      <button id="sms-advance" onclick="setModalStatus('advance')" style="flex:1;padding:7px 4px;border-radius:8px;border:2px solid var(--border);font-size:11px;cursor:pointer;font-family:'Cinzel',serif;letter-spacing:0.5px;color:#b45309;">Avance</button>
+      <button id="sms-absent"  onclick="setModalStatus('absent')"  style="flex:1;padding:7px 4px;border-radius:8px;border:2px solid var(--border);font-size:11px;cursor:pointer;font-family:'Cinzel',serif;letter-spacing:0.5px;color:var(--red);">Absent</button>
+    </div>
+    <div id="sal-modal-amount-wrap">
+      <div class="sal-modal-inputs">
+        <button class="sal-modal-adj" ontouchstart="adjustDayBy(-10)" onclick="adjustDayBy(-10)">−10</button>
+        <button class="sal-modal-adj" ontouchstart="adjustDayBy(-5)" onclick="adjustDayBy(-5)">−5</button>
+        <input id="sal-day-input" class="inv-input" type="number" min="0" step="1" style="width:80px;text-align:center;font-size:22px;">
+        <button class="sal-modal-adj" ontouchstart="adjustDayBy(5)" onclick="adjustDayBy(5)">+5</button>
+        <button class="sal-modal-adj" ontouchstart="adjustDayBy(10)" onclick="adjustDayBy(10)">+10</button>
+      </div>
+      <div class="sal-modal-hint" id="sal-modal-hint"></div>
+      <div style="display:flex;gap:8px;justify-content:center;">
+        <button class="sal-modal-reset" onclick="resetHours()">Standard</button>
+      </div>
+    </div>
+    <div class="sal-modal-btns">
+      <button class="sal-modal-confirm" onclick="confirmHours()">Confirmer</button>
+      <button class="sal-modal-cancel" onclick="closeHoursModal()">Annuler</button>
+    </div>
+  </div>
+</div>
+
+<!-- RECETTE EDIT MODAL -->
+<div id="rec-edit-modal" style="display:none;position:fixed;inset:0;z-index:500;align-items:center;justify-content:center;">
+  <div class="sal-modal-backdrop" onclick="closeRecModal()"></div>
+  <div class="sal-modal-box">
+    <div class="sal-modal-title" id="rec-modal-title"></div>
+    <div id="rec-modal-input-wrap" style="display:none;">
+      <input id="rec-modal-input" class="inv-input" type="text" style="width:100%;text-align:center;font-size:20px;">
+    </div>
+    <div class="sal-modal-btns">
+      <button class="sal-modal-confirm" id="rec-modal-confirm-btn" onclick="confirmRecModal()">Confirmer</button>
+      <button class="sal-modal-cancel" onclick="closeRecModal()">Annuler</button>
+    </div>
+  </div>
+</div>
+
+<!-- SALAIRE BOTTOM PANEL -->
+<div class="sal-bp" id="sal-bp">
+  <div class="sal-bp-handle" onclick="toggleSalPanel()">
+    <div class="sal-bp-bar"></div>
+    <div class="sal-bp-peek">
+      <span class="sal-bp-peek-title">Vue d'ensemble</span>
+      <div class="sal-bp-peek-nums" id="sal-bp-peek-nums"></div>
+    </div>
+  </div>
+  <div class="sal-bp-scroll" id="sal-bp-staff"></div>
+  <div class="sal-bp-footer" id="sal-bp-footer"></div>
+</div>
+
+<!-- BOTTOM NAV -->
+<nav class="bottom-nav">
+  <button class="bnav-tab active" onclick="showPage(0)" id="bnav-0">
+    <span class="bnav-icon"><svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg></span><span>Aujourd'hui</span>
+  </button>
+  <button class="bnav-tab" onclick="showPage(1)" id="bnav-1">
+    <span class="bnav-icon"><svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"/><path d="M14 2v5a1 1 0 0 0 1 1h5"/><path d="M8 18v-1"/><path d="M12 18v-6"/><path d="M16 18v-3"/></svg></span><span>Rapport</span>
+  </button>
+  <button class="bnav-tab" onclick="showPage(2)" id="bnav-2">
+    <span class="bnav-icon"><svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 7h6v6"/><path d="m22 7-8.5 8.5-5-5L2 17"/></svg></span><span>Revenus</span>
+  </button>
+  <button class="bnav-tab" onclick="showPage(3)" id="bnav-3">
+    <span class="bnav-icon"><svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v6"/><path d="M16.76 3a2 2 0 0 1 1.8 1.1l2.23 4.479a2 2 0 0 1 .21.891V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V9.472a2 2 0 0 1 .211-.894L5.45 4.1A2 2 0 0 1 7.24 3z"/><path d="M3.054 9.013h17.893"/></svg></span><span>Inventaire</span>
+  </button>
+  <button class="bnav-tab" onclick="showPage(4)" id="bnav-4">
+    <span class="bnav-icon"><svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1"/><path d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4"/></svg></span><span>Salaire</span>
+  </button>
+  <button class="bnav-tab" onclick="showPage(5)" id="bnav-5">
+    <span class="bnav-icon"><svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 17V7"/><path d="M16 8h-6a2 2 0 0 0 0 4h4a2 2 0 0 1 0 4H8"/><path d="M4 3a1 1 0 0 1 1-1 1.3 1.3 0 0 1 .7.2l.933.6a1.3 1.3 0 0 0 1.4 0l.934-.6a1.3 1.3 0 0 1 1.4 0l.933.6a1.3 1.3 0 0 0 1.4 0l.933-.6a1.3 1.3 0 0 1 1.4 0l.934.6a1.3 1.3 0 0 0 1.4 0l.933-.6A1.3 1.3 0 0 1 19 2a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1 1.3 1.3 0 0 1-.7-.2l-.933-.6a1.3 1.3 0 0 0-1.4 0l-.934.6a1.3 1.3 0 0 1-1.4 0l-.933-.6a1.3 1.3 0 0 0-1.4 0l-.933.6a1.3 1.3 0 0 1-1.4 0l-.934-.6a1.3 1.3 0 0 0-1.4 0l-.933.6a1.3 1.3 0 0 1-.7.2 1 1 0 0 1-1-1z"/></svg></span><span>Recette</span>
+  </button>
+</nav>
+
+
+<!-- App layer — strict load order -->
+<script src="./app/local-api.js"></script>
+<script src="./app/location-picker.js"></script>
+<script src="./app/state.js"></script>
+<script src="./app/helpers.js"></script>
+<script src="./app/data-loader.js"></script>
+<script src="./app/page-nav.js"></script>
+<script src="./app/page-today.js"></script>
+<script src="./app/page-barista.js"></script>
+<script src="./app/page-daily.js"></script>
+<script src="./app/page-revenue.js"></script>
+<script src="./app/page-inventory.js"></script>
+<script src="./app/page-salary.js"></script>
+<script src="./app/page-recette.js"></script>
+<script src="./app/app-init.js"></script>
+</body>
+</html>

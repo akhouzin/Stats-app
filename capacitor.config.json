@@ -1,0 +1,8 @@
+{
+  "appId": "com.erpgen.stats",
+  "appName": "ERPGEN Stats",
+  "webDir": "www",
+  "server": {
+    "androidScheme": "https"
+  }
+}

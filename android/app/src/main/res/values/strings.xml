@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">ERPGEN Stats</string>
+    <string name="title_activity_main">ERPGEN Stats</string>
+    <string name="package_name">com.erpgen.stats</string>
+    <string name="custom_url_scheme">com.erpgen.stats</string>
+</resources>
