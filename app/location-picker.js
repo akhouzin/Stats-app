@@ -277,11 +277,18 @@ function _handleQRResult(rawValue) {
     }
 
     if (u.protocol === 'https:' || u.protocol === 'http:') {
-      // Direct tunnel URL (new format) — fill URL field, user enters name then clicks + Ajouter
+      // Direct tunnel URL — auto-save with hostname as name and connect immediately
       stopQRScan();
-      document.getElementById('loc-url-input').value = u.origin;
-      const nameInput = document.getElementById('loc-name-input');
-      if (!nameInput.value) nameInput.focus();
+      const tunnelUrl = u.origin;
+      const autoName  = u.hostname;
+      const list = _getLocations();
+      if (!list.some(l => l.url === tunnelUrl)) {
+        list.push({ name: autoName, url: tunnelUrl });
+        _saveLocations(list);
+      }
+      localStorage.setItem('cp_api_url', tunnelUrl);
+      closeLocationModal();
+      loadData();
       return;
     }
 

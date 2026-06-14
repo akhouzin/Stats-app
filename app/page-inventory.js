@@ -31,105 +31,12 @@ const MANUAL_ITEMS = [
   { key: 'chocolat', label: 'Chocolat',   unit: 'g' },
 ];
 
-let invPeriod = 'today';
-let invOffset = 0;
-let invOpenKey = null;
-
-function setInvPeriod(period, btn) {
-  invPeriod = period;
-  invOffset = 0;
-  document.querySelectorAll('.inv-period-btn').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
-  renderInventaire();
-}
-
-function changeInvOffset(dir) {
-  invOffset = Math.max(0, invOffset + dir);
-  renderInventaire();
-}
-
-function getWeekStart(date) {
-  const d = new Date(date);
-  const diff = (d.getDay() + 6) % 7; // days since Monday (Mon=0,...,Sun=6)
-  d.setDate(d.getDate() - diff);
-  d.setHours(0, 0, 0, 0);
-  return d;
-}
-
-function getInvPeriodBounds() {
-  const now = new Date();
-  if (invPeriod === 'today') {
-    const d = new Date(now);
-    d.setDate(d.getDate() - invOffset);
-    d.setHours(0, 0, 0, 0);
-    const end = new Date(d); end.setHours(23, 59, 59, 999);
-    const label = invOffset === 0 ? "Aujourd'hui" : fmtDate(d);
-    return { from: d, to: end, label };
-  } else if (invPeriod === 'week') {
-    const currentMon = getWeekStart(now);
-    const weekMon = new Date(currentMon);
-    weekMon.setDate(weekMon.getDate() - invOffset * 7);
-    const weekSun = new Date(weekMon);
-    weekSun.setDate(weekSun.getDate() + 6);
-    weekSun.setHours(23, 59, 59, 999);
-    const label = `${fmtDateShort(weekMon)} – ${fmtDateShort(weekSun)}`;
-    return { from: weekMon, to: weekSun, label };
-  } else {
-    const y = now.getFullYear();
-    const m = now.getMonth() - invOffset;
-    const from = new Date(y, m, 1);
-    const to = new Date(y, m + 1, 0, 23, 59, 59, 999);
-    const raw = from.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
-    return { from, to, label: raw.charAt(0).toUpperCase() + raw.slice(1) };
-  }
-}
-
-function getInvOrders() {
-  const { from, to } = getInvPeriodBounds();
-  return allOrders.filter(o => o.time >= from && o.time <= to);
-}
-
-// ── Event-sourced restock log ──
+// ── Event-sourced restock log (used by Rapport Barista / Recette) ──
 function getRestocks(key) {
   return (_restocks[key] || []).slice();
 }
 function toISODate(d) {
   return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
-}
-async function addRestock(key, dateStr, amount, price) {
-  amount = parseFloat(amount);
-  if (!amount || amount <= 0) return;
-  price = parseFloat(price) || null;
-  const id = Date.now().toString();
-  const row = { id, key, date: dateStr, amount };
-  if (price) row.price_per_unit = price;
-  const { error } = await sb.from('inv_restocks').insert(row);
-  if (error) { console.error('addRestock:', error.message); return; }
-  if (!_restocks[key]) _restocks[key] = [];
-  _restocks[key].push({ id, date: dateStr, amount, price });
-  _restocks[key].sort((a, b) => a.date.localeCompare(b.date));
-  renderInventaire();
-}
-async function deleteRestock(key, id) {
-  await sb.from('inv_restocks').delete().eq('id', id);
-  if (_restocks[key]) _restocks[key] = _restocks[key].filter(e => e.id !== id);
-  renderInventaire();
-}
-async function submitRestock(key) {
-  const di = document.getElementById('inv-rf-date-'  + key);
-  const ai = document.getElementById('inv-rf-amt-'   + key);
-  const pi = document.getElementById('inv-rf-price-' + key);
-  const amount = parseFloat(ai ? ai.value : 0);
-  if (!amount || amount <= 0) { if (ai) ai.focus(); return; }
-  const dateStr = di ? di.value : toISODate(new Date());
-  const price   = pi ? pi.value : '';
-  await addRestock(key, dateStr, amount, price);
-  if (ai) ai.value = '';
-  if (pi) pi.value = '';
-}
-function toggleInvForm(key) {
-  invOpenKey = invOpenKey === key ? null : key;
-  renderInventaire();
 }
 
 // Count items sold matching keywords in a set of orders
@@ -202,19 +109,6 @@ function stockBalanceAt(key, date) {
   return snap.amount - consumedBetween(key, snapStart, endOfDay);
 }
 
-// Period stats: opening balance, consumed in period, current balance
-function periodStockStats(key, from, to) {
-  const snap = getLatestSnapshot(key, to);
-  if (!snap) return { opening: 0, consumed: 0, current: 0 };
-  const dayBefore = new Date(from); dayBefore.setDate(dayBefore.getDate() - 1);
-  const opening = stockBalanceAt(key, dayBefore);
-  const current = stockBalanceAt(key, to);
-  const snapStart = new Date(snap.date + 'T00:00:00');
-  const effectiveFrom = snapStart > from ? snapStart : from;
-  const consumed = consumedBetween(key, effectiveFrom, to);
-  return { opening, consumed, current };
-}
-
 function fmtNum(n) { return n % 1 === 0 ? String(Math.round(n)) : n.toFixed(1); }
 
 // Weighted average price per unit across all restocks that have a price
@@ -226,106 +120,162 @@ function weightedAvgPrice(key) {
   return totalAmt > 0 ? totalVal / totalAmt : null;
 }
 
+// ═══════════════════════════════════════
+// INVENTAIRE — read-only mirror of the POS Marchandise/Inventaire page.
+// Entrées = marc_achats (converted via conv_pkg/conv_pl), Vendu = closedOrders
+// items linked via marc_links, Variation = Entrées − Vendu. No editing here —
+// articles, achats and links are managed in the POS.
+// ═══════════════════════════════════════
+let invPeriod = 'today';
+
+function setInvPeriod(period, btn) {
+  invPeriod = period;
+  document.querySelectorAll('.inv-period-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderInventaire();
+}
+
+function _minvWeekRange() {
+  const now = new Date();
+  const dow = (now.getDay() + 6) % 7; // Monday = 0
+  const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - dow);
+  const sunday  = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + 6);
+  return { monday, sunday };
+}
+
+function _minvOrdersInPeriod(period) {
+  const now = new Date();
+  if (period === 'today') {
+    const key = getDayKey(now);
+    return allOrders.filter(o => getDayKey(o.time) === key);
+  }
+  if (period === 'week') {
+    const { monday, sunday } = _minvWeekRange();
+    const nextMonday = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + 7);
+    return allOrders.filter(o => o.time >= monday && o.time < nextMonday);
+  }
+  return allOrders.filter(o =>
+    o.time.getFullYear() === now.getFullYear() && o.time.getMonth() === now.getMonth());
+}
+
+function _minvAchatsInPeriod(period) {
+  const now = new Date();
+  if (period === 'today') {
+    const todayISO = toISODate(now);
+    return _marcAchats.filter(a => a.date === todayISO);
+  }
+  if (period === 'week') {
+    const { monday, sunday } = _minvWeekRange();
+    const fromISO = toISODate(monday), toISO = toISODate(sunday);
+    return _marcAchats.filter(a => a.date >= fromISO && a.date <= toISO);
+  }
+  const prefix = toISODate(now).slice(0, 7); // YYYY-MM
+  return _marcAchats.filter(a => a.date && a.date.startsWith(prefix));
+}
+
+function _minvPeriodLabel(period) {
+  const now = new Date();
+  if (period === 'today') return getDayKey(now);
+  if (period === 'week') {
+    const { monday, sunday } = _minvWeekRange();
+    return `${getDayKey(monday)} – ${getDayKey(sunday)}`;
+  }
+  const raw = now.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+  return raw.charAt(0).toUpperCase() + raw.slice(1);
+}
+
+function _minvFmt(n) {
+  return n % 1 === 0 ? String(n) : n.toFixed(2);
+}
+
+function _minvStockIn(article, achats) {
+  const convPkg = article.conv_pkg != null ? article.conv_pkg : 1;
+  const convPl  = article.conv_pl  != null ? article.conv_pl  : 1;
+  let total = 0;
+  achats.forEach(a => {
+    if (a.article_id !== article.id) return;
+    total += (a.qty_pu || 0) + (a.qty_pkg || 0) * convPkg + (a.qty_pl || 0) * convPl;
+  });
+  return total;
+}
+
+function _minvStockOut(article, orders) {
+  let total = 0;
+  _marcLinks
+    .filter(l => l.article_id === article.id)
+    .forEach(link => {
+      orders.forEach(o => {
+        (o.items || []).forEach(item => {
+          if (item.name === link.item_name) total += item.qty * (link.qty_per_sale || 0);
+        });
+      });
+    });
+  return total;
+}
+
 function renderInventaire() {
-  const bounds = getInvPeriodBounds();
-  document.getElementById('inv-period-label').textContent = bounds.label;
-  document.getElementById('inv-next').disabled = invOffset <= 0;
-  document.getElementById('inv-cons-period').textContent = bounds.label;
-  document.getElementById('inv-man-period').textContent  = bounds.label;
+  document.getElementById('inv-period-label').textContent = _minvPeriodLabel(invPeriod);
 
-  const { from, to } = bounds;
-  const todayISO = toISODate(new Date());
-
-  function buildRow(key, label, unit, packSize, packUnit) {
-    const stats   = periodStockStats(key, from, to);
-    const hasData = getLatestSnapshot(key, to) !== null;
-
-    const openDisp  = hasData ? fmtNum(Math.max(0, stats.opening))  : '—';
-    const currDisp  = hasData ? fmtNum(Math.max(0, stats.current))  : '—';
-    const currCls   = !hasData ? 'none' : stats.current <= 0 ? 'out' : stats.current < stats.opening * 0.2 + 1 ? 'low' : 'ok';
-    const consDisp  = fmtNum(stats.consumed);
-
-    const isOpen  = invOpenKey === key;
-    const restocks = getRestocks(key).slice().reverse();
-    const avgPrice = weightedAvgPrice(key);
-    const currVal  = (avgPrice && hasData) ? Math.max(0, stats.current) * avgPrice : null;
-    const consVal  = (avgPrice && hasData) ? stats.consumed * avgPrice : null;
-
-    const histHtml = restocks.length
-      ? restocks.map(e => `
-          <div class="inv-hist-item">
-            <span class="inv-hist-date">${e.date}</span>
-            <span class="inv-hist-amt">${fmtNum(e.amount)} <span style="font-size:10px;font-weight:400;">${unit}</span>${e.price ? ` · <span style="font-size:10px;color:var(--green);">${fmtMoney(e.price)} Dhs/${unit}</span>` : ''}</span>
-            <button class="inv-hist-del" onclick="deleteRestock('${key}','${e.id}')">✕</button>
-          </div>`).join('')
-      : `<div class="inv-hist-empty">Aucun inventaire enregistré</div>`;
-
-    return `
-      <div class="inv-row">
-        <div class="inv-main-line">
-          <div class="inv-name">${label}<span class="inv-unit">${unit}</span></div>
-          <div class="inv-right">
-            <div style="text-align:right;">
-              <span class="inv-num ${currCls}">${currDisp}</span>
-              ${currVal !== null ? `<div class="inv-val-tag">≈ ${fmtMoney(currVal)} Dhs</div>` : ''}
-              ${(() => {
-                if (!packSize || !hasData) return '';
-                const curr = Math.max(0, stats.current);
-                const full = Math.floor(curr / packSize);
-                const rem  = Math.round(curr % packSize);
-                const txt  = rem > 0 ? `${full} ${packUnit} + ${rem} ${unit}` : `${full} ${packUnit}`;
-                return `<div class="inv-pack-info">${txt}</div>`;
-              })()}
-            </div>
-            <button class="inv-open-btn${isOpen ? ' active' : ''}" onclick="toggleInvForm('${key}')">${isOpen ? '✕' : '+'}</button>
-          </div>
-        </div>
-        <div class="inv-sub-line">${hasData
-          ? `Ouverture : ${openDisp} &nbsp;·&nbsp; Consommé : <span style="color:var(--red);font-weight:700;">${consDisp}</span>${consVal !== null ? ` <span style="color:var(--red);font-size:10px;">(≈ ${fmtMoney(consVal)} Dhs)</span>` : ''}`
-          : 'Appuyez sur <b>+</b> pour enregistrer le stock actuel'}</div>
-        ${isOpen ? `
-        <div class="inv-restock-zone">
-          <div class="inv-restock-form">
-            <input class="inv-rf-input inv-rf-date" type="date" id="inv-rf-date-${key}" value="${todayISO}">
-            <input class="inv-rf-input inv-rf-amt" type="number" min="0" step="any" id="inv-rf-amt-${key}" placeholder="Stock actuel">
-            <input class="inv-rf-input inv-rf-price" type="number" min="0" step="any" id="inv-rf-price-${key}" placeholder="Prix/unité">
-            <button class="inv-rf-btn" onclick="submitRestock('${key}')">Enregistrer</button>
-          </div>
-          ${restocks.length ? '<div class="inv-hist-title">Historique des inventaires</div>' : ''}
-          ${histHtml}
-        </div>` : ''}
-      </div>`;
+  const wrap = document.getElementById('minv-table-wrap');
+  if (_marcArticles.length === 0) {
+    wrap.innerHTML = '<div class="empty">Aucun article configuré dans Marchandise.</div>';
+    return;
   }
 
-  document.getElementById('inv-consumables').innerHTML =
-    CONSUMABLES.map(c => buildRow(c.key, c.label, c.unit, c.packSize, c.packUnit)).join('');
-
-  document.getElementById('inv-manual').innerHTML =
-    MANUAL_ITEMS.map(m => buildRow(m.key, m.label, m.unit)).join('');
-
-  // ── Bilan totals ──
-  const allKeys = [...CONSUMABLES.map(c => c.key), ...MANUAL_ITEMS.map(m => m.key)];
-  let totalCons = 0, totalLeft = 0, hasAny = false;
-  allKeys.forEach(key => {
-    const avg = weightedAvgPrice(key);
-    if (!avg) return;
-    hasAny = true;
-    const stats = periodStockStats(key, from, to);
-    totalCons += Math.max(0, stats.consumed) * avg;
-    totalLeft += Math.max(0, stats.current) * avg;
+  const catMap = Object.fromEntries(_marcCategories.map(c => [c.id, c]));
+  const groups = {};
+  const nocat  = [];
+  _marcArticles.forEach(a => {
+    if (a.cat_id && catMap[a.cat_id]) (groups[a.cat_id] = groups[a.cat_id] || []).push(a);
+    else nocat.push(a);
   });
 
-  document.getElementById('inv-totals').innerHTML = hasAny ? `
-    <div class="inv-totals">
-      <div class="inv-total-cell">
-        <div class="inv-total-label">Consommé</div>
-        <div class="inv-total-val" style="color:var(--red);">${fmtMoney(totalCons)}</div>
-        <div class="inv-total-sub">Dhs</div>
-      </div>
-      <div class="inv-total-cell">
-        <div class="inv-total-label">En stock</div>
-        <div class="inv-total-val" style="color:var(--green);">${fmtMoney(totalLeft)}</div>
-        <div class="inv-total-sub">Dhs</div>
-      </div>
-    </div>` : '<div class="empty" style="padding:10px 0;font-size:11px;">Ajoutez des prix lors des inventaires pour voir le bilan</div>';
+  const periodOrders = _minvOrdersInPeriod(invPeriod);
+  const periodAchats = _minvAchatsInPeriod(invPeriod);
+
+  const buildRow = art => {
+    const unit  = art.unit_label || 'unité';
+    const inQty = _minvStockIn(art, periodAchats);
+    const out   = _minvStockOut(art, periodOrders);
+    const solde = inQty - out;
+    const links = _marcLinks.filter(l => l.article_id === art.id);
+
+    let badgeClass = 'minv-badge-ok';
+    if (solde < 0) badgeClass = 'minv-badge-out';
+    else if (solde === 0) badgeClass = 'minv-badge-low';
+
+    const soldeText = solde > 0 ? `+${_minvFmt(solde)}` : _minvFmt(solde);
+
+    const linksHtml = links.length
+      ? links.map(l => `<span class="minv-link-chip">${l.item_name} ×${_minvFmt(l.qty_per_sale)}</span>`).join('')
+      : '<span class="minv-link-none">—</span>';
+
+    return `
+      <div class="minv-row">
+        <div class="minv-row-main">
+          <div class="minv-name">${art.nom}<span class="minv-unit">${unit}</span></div>
+          <div class="minv-stats">
+            <div class="minv-stat"><span class="minv-stat-val">${_minvFmt(inQty)}</span><span class="minv-stat-label">Entrées</span></div>
+            <div class="minv-stat"><span class="minv-stat-val">${_minvFmt(out)}</span><span class="minv-stat-label">Vendu</span></div>
+            <div class="minv-stat"><span class="minv-badge ${badgeClass}">${soldeText}</span><span class="minv-stat-label">Variation</span></div>
+          </div>
+        </div>
+        <div class="minv-links-cell">${linksHtml}</div>
+      </div>`;
+  };
+
+  const sorted = [..._marcCategories].sort((a, b) => a.sort_order - b.sort_order);
+  let html = '';
+  sorted.forEach(cat => {
+    const arts = groups[cat.id];
+    if (!arts || arts.length === 0) return;
+    html += `<div class="minv-cat-row">${cat.nom}</div>`;
+    arts.slice().sort((a, b) => a.nom.localeCompare(b.nom)).forEach(a => html += buildRow(a));
+  });
+  if (nocat.length > 0) {
+    html += `<div class="minv-cat-row">Sans catégorie</div>`;
+    nocat.slice().sort((a, b) => a.nom.localeCompare(b.nom)).forEach(a => html += buildRow(a));
+  }
+
+  wrap.innerHTML = html;
 }

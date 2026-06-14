@@ -76,3 +76,19 @@ async function fetchTodayOrders() {
 async function fetchAllOrders() {
   return apiGet('/api/orders');
 }
+
+async function fetchMarcCategories() {
+  return apiGet('/api/marc/categories');
+}
+
+async function fetchMarcArticles() {
+  return apiGet('/api/marc/articles');
+}
+
+async function fetchMarcAchats() {
+  return apiGet('/api/marc/achats');
+}
+
+async function fetchMarcLinks() {
+  return apiGet('/api/marc/links');
+}

@@ -112,24 +112,9 @@
     <button class="inv-period-btn" onclick="setInvPeriod('week',this)">Semaine</button>
     <button class="inv-period-btn" onclick="setInvPeriod('month',this)">Mois</button>
   </div>
-  <div class="day-nav" style="margin-bottom:14px;">
-    <button class="day-nav-btn" id="inv-prev" onclick="changeInvOffset(1)">‹</button>
-    <div>
-      <div class="day-label" id="inv-period-label">—</div>
-    </div>
-    <button class="day-nav-btn" id="inv-next" onclick="changeInvOffset(-1)" disabled>›</button>
-  </div>
-  <div class="card" id="inv-totals-card">
-    <div class="card-title">Bilan Marchandises</div>
-    <div id="inv-totals"></div>
-  </div>
-  <div class="card">
-    <div class="card-title">Consommables — <span id="inv-cons-period" style="font-weight:400;color:var(--text-dim);"></span></div>
-    <div id="inv-consumables"></div>
-  </div>
-  <div class="card">
-    <div class="card-title">Stock Manuel — <span id="inv-man-period" style="font-weight:400;color:var(--text-dim);"></span></div>
-    <div id="inv-manual"></div>
+  <div class="minv-period-range" id="inv-period-label">—</div>
+  <div class="card" id="minv-card">
+    <div id="minv-table-wrap"></div>
   </div>
 </div>
 

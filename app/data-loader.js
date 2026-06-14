@@ -2,14 +2,22 @@
 // LOAD DATA
 // ═══════════════════════════════════════
 async function loadLocalData() {
-  const [restocks, salStaff, salDays, menuData, charges, chargeDays] = await Promise.all([
+  const [restocks, salStaff, salDays, menuData, charges, chargeDays, marcCats, marcArts, marcAchats, marcLinks] = await Promise.all([
     apiGet('/api/restocks'),
     apiGet('/api/sal/staff'),
     apiGet('/api/sal/days'),
     apiGet('/api/menu-items'),
     apiGet('/api/rec/charges'),
     apiGet('/api/rec/charge-days'),
+    fetchMarcCategories(),
+    fetchMarcArticles(),
+    fetchMarcAchats(),
+    fetchMarcLinks(),
   ]);
+  _marcCategories = marcCats;
+  _marcArticles   = marcArts;
+  _marcAchats     = marcAchats;
+  _marcLinks      = marcLinks;
   _restocks = {};
   restocks.forEach(r => {
     if (!_restocks[r.key]) _restocks[r.key] = [];
