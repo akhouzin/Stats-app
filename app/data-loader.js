@@ -39,9 +39,13 @@ async function loadLocalData() {
   });
 }
 
-function mapOrders(raw, cancelledNums) {
+function mapOrders(raw, cancelledKeys) {
   return raw
-    .filter(r => r.num && !cancelledNums.has(r.num))
+    .filter(r => {
+      if (!r.num) return false;
+      const dayKey = r.time ? String(r.time).substring(0, 10) : '';
+      return !cancelledKeys.has(`${r.num}|${dayKey}`);
+    })
     .map(r => ({ num: r.num, items: r.items, total: r.total, time: new Date(r.time), server: r.server || '—' }));
 }
 
@@ -52,10 +56,10 @@ function renderPage(idx) {
   switch (idx) {
     case 0: renderToday();      break;
     case 1: renderRapport();    break;
-    case 2: renderRevenue();    break;
-    case 3: renderInventaire(); break;
-    case 4: renderSalaire();    break;
-    case 5: renderRecette();    break;
+    case 2: renderRecette();    break;
+    case 3: renderSalaire();    break;
+    case 4: renderInventaire(); break;
+    case 5: renderRevenue();    break;
   }
 }
 
@@ -68,8 +72,8 @@ async function loadData() {
       loadLocalData(),
     ]);
 
-    const cancelledNums = new Set(cancelledData.map(r => r.num));
-    allOrders = mapOrders(todayRaw, cancelledNums);
+    const cancelledKeys = new Set(cancelledData.map(r => `${r.num}|${r.dateKey}`));
+    allOrders = mapOrders(todayRaw, cancelledKeys);
     _ordersStamp++;
 
     document.getElementById('live-status').textContent = 'En ligne';
@@ -79,7 +83,7 @@ async function loadData() {
 
     document.getElementById('live-status').textContent = 'Chargement…';
     const allRaw = await fetchAllOrders();
-    allOrders = mapOrders(allRaw, cancelledNums);
+    allOrders = mapOrders(allRaw, cancelledKeys);
     _ordersStamp++;
     clearConsumptionCache();
     historyLoaded = true;

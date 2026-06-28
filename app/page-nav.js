@@ -18,11 +18,11 @@ function showPage(idx) {
     document.querySelectorAll('.bnav-tab').forEach((t, i) => t.classList.toggle('active', i === idx));
 
     const bp = document.getElementById('sal-bp');
-    if (idx === 4) { bp.classList.add('sal-bp-show'); document.body.classList.add('sal-bp-active'); }
+    if (idx === 3) { bp.classList.add('sal-bp-show'); document.body.classList.add('sal-bp-active'); }
     else { bp.classList.remove('sal-bp-show', 'sal-bp-open'); document.body.classList.remove('sal-bp-active'); salPanelOpen = false; }
 
     const recBar = document.getElementById('rec-summary-bar');
-    if (idx === 5) { recBar.style.display = 'block'; document.body.classList.add('rec-bar-active'); }
+    if (idx === 2) { recBar.style.display = 'block'; document.body.classList.add('rec-bar-active'); }
     else           { recBar.style.display = 'none';  document.body.classList.remove('rec-bar-active'); }
 
     window.scrollTo(0, 0);
