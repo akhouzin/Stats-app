@@ -8,20 +8,20 @@
 <meta name="apple-mobile-web-app-title" content="CP Stats">
 <link rel="apple-touch-icon" href="logo.png">
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400;1,600&family=Cinzel:wght@400;600;700&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
-<title>ERPGEN — Stats</title>
+<title>Coin Prestige — Stats</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <link rel="stylesheet" href="./styles/stats.css">
 </head>
 <body>
 
 <div class="topbar">
-  <div>
-    <div class="topbar-title">ERPGEN</div>
+  <div class="topbar-center">
+    <div class="topbar-title">Coin Prestige</div>
     <div class="topbar-sub">Statistiques</div>
   </div>
   <div class="topbar-time">
     <div><span class="live-dot"></span><span id="live-status">Chargement…</span></div>
-    <div id="clock" style="margin-top:2px;"></div>
+    <div id="clock" class="topbar-clock"></div>
   </div>
   <div id="pending-banner" class="pending-banner"></div>
 </div>
@@ -33,9 +33,14 @@
 <div class="page" id="page-today">
   <div id="today-loading" class="loading"><div class="spinner"></div><br>Chargement…</div>
   <div id="today-content" style="display:none;">
+    <div class="day-nav" style="margin-bottom:12px;">
+      <button class="day-nav-btn" id="t-day-prev" onclick="changeTodayDay(-1)">‹</button>
+      <div><div class="day-label" id="t-day-label">—</div></div>
+      <button class="day-nav-btn" id="t-day-next" onclick="changeTodayDay(1)">›</button>
+    </div>
     <div class="kpi-grid">
-      <div class="kpi"><div class="kpi-label">Commandes</div><div class="kpi-value" id="t-orders">—</div><div class="kpi-sub">aujourd'hui</div></div>
-      <div class="kpi"><div class="kpi-label">Chiffre d'affaires</div><div class="kpi-value green" id="t-revenue">—</div><div class="kpi-sub">Dhs aujourd'hui</div></div>
+      <div class="kpi"><div class="kpi-label">Commandes</div><div class="kpi-value" id="t-orders">—</div><div class="kpi-sub" id="t-sub-orders">aujourd'hui</div></div>
+      <div class="kpi"><div class="kpi-label">Chiffre d'affaires</div><div class="kpi-value green" id="t-revenue">—</div><div class="kpi-sub" id="t-sub-revenue">Dhs aujourd'hui</div></div>
       <div class="kpi"><div class="kpi-label">Panier Moyen</div><div class="kpi-value" id="t-avg">—</div><div class="kpi-sub">Dhs / commande</div></div>
       <div class="kpi"><div class="kpi-label">Articles vendus</div><div class="kpi-value" id="t-items">—</div><div class="kpi-sub">unités</div></div>
     </div>
@@ -44,11 +49,11 @@
       <div id="t-recent" class="scroll-list"></div>
     </div>
     <div class="card">
-      <div class="card-title">Par Serveur — Aujourd'hui</div>
+      <div class="card-title">Par Serveur — <span id="t-servers-title">Aujourd'hui</span></div>
       <div id="t-servers"></div>
     </div>
     <div class="card">
-      <div class="card-title">Rapport Barista — Aujourd'hui</div>
+      <div class="card-title">Rapport Barista — <span id="t-barista-title">Aujourd'hui</span></div>
       <div id="t-barista"></div>
     </div>
   </div>
@@ -132,6 +137,7 @@
       <table class="sal-sheet-table" id="sal-sheet"></table>
     </div>
     <div class="sal-sheet-legend">
+      <div class="sal-leg-item"><span class="sal-leg-dot" style="background:#dbeafe;"></span>Travaillé</div>
       <div class="sal-leg-item"><span class="sal-leg-dot" style="background:#c8e6c9;"></span>Payé</div>
       <div class="sal-leg-item"><span class="sal-leg-dot" style="background:#c5cae9;"></span>Avance</div>
       <div class="sal-leg-item"><span class="sal-leg-dot" style="background:#ffcdd2;"></span>Absent</div>
@@ -215,7 +221,7 @@
 <!-- BOTTOM NAV -->
 <nav class="bottom-nav">
   <button class="bnav-tab active" onclick="showPage(0)" id="bnav-0">
-    <span class="bnav-icon"><svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg></span><span>Aujourd'hui</span>
+    <span class="bnav-icon"><svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg></span><span>Commandes</span>
   </button>
   <button class="bnav-tab" onclick="showPage(1)" id="bnav-1">
     <span class="bnav-icon"><svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"/><path d="M14 2v5a1 1 0 0 0 1 1h5"/><path d="M8 18v-1"/><path d="M12 18v-6"/><path d="M16 18v-3"/></svg></span><span>Rapport</span>

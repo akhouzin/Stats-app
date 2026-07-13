@@ -1,8 +1,9 @@
 // ═══════════════════════════════════════
 // RAPPORT BARISTA
 // ═══════════════════════════════════════
-function renderBaristaReport(todayOrders) {
+function renderBaristaReport(todayOrders, dayLabelLower) {
   const now = new Date();
+  dayLabelLower = dayLabelLower || "aujourd'hui";
   const cons = calcConsumption(todayOrders);
 
   // Build unified item list: consumables (auto-calc) + manual items (keyword-counted)
@@ -26,7 +27,7 @@ function renderBaristaReport(todayOrders) {
   });
 
   if (!rows.length) {
-    document.getElementById('t-barista').innerHTML = '<div class="empty">Aucune activité aujourd\'hui</div>';
+    document.getElementById('t-barista').innerHTML = `<div class="empty">Aucune activité ${dayLabelLower}</div>`;
     return;
   }
 

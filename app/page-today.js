@@ -1,12 +1,39 @@
 // ═══════════════════════════════════════
 // TODAY
 // ═══════════════════════════════════════
+const TODAY_MAX_OFFSET = -7;
+
+function changeTodayDay(dir) {
+  dayOffset = Math.max(TODAY_MAX_OFFSET, Math.min(0, dayOffset + dir));
+  renderToday();
+}
+
 function renderToday() {
-  const todayKey = getDayKey(new Date());
-  const orders = allOrders.filter(o => getDayKey(o.time) === todayKey);
+  const day = new Date();
+  day.setDate(day.getDate() + dayOffset);
+  const dayKey = getDayKey(day);
+  const orders = allOrders.filter(o => getDayKey(o.time) === dayKey);
 
   document.getElementById('today-loading').style.display = 'none';
   document.getElementById('today-content').style.display = 'block';
+
+  // Day label + nav state
+  const isToday = dayOffset === 0;
+  const isYesterday = dayOffset === -1;
+  const dayLabel = isToday ? "Aujourd'hui" : isYesterday ? 'Hier' : day.toLocaleDateString('fr-MA', { weekday: 'long', day: '2-digit', month: 'long' });
+  document.getElementById('t-day-label').textContent = isToday || isYesterday
+    ? dayLabel + ' — ' + day.toLocaleDateString('fr-MA', { day: '2-digit', month: 'short' })
+    : dayLabel;
+  document.getElementById('t-day-prev').disabled = dayOffset <= TODAY_MAX_OFFSET;
+  document.getElementById('t-day-next').disabled = dayOffset >= 0;
+
+  const dayLabelLower = dayLabel.toLowerCase();
+  document.getElementById('t-sub-orders').textContent = dayLabelLower;
+  document.getElementById('t-sub-revenue').textContent = 'Dhs ' + dayLabelLower;
+  document.getElementById('t-servers-title').textContent = dayLabel;
+  document.getElementById('t-barista-title').textContent = dayLabel;
+
+  const emptyMsg = `<div class="empty">Aucune commande ${dayLabelLower}</div>`;
 
   const total = orders.reduce((s, o) => s + o.total, 0);
   const items = orders.reduce((s, o) => s + o.items.reduce((ss, i) => ss + i.qty, 0), 0);
@@ -25,9 +52,9 @@ function renderToday() {
           <div class="row-name">${name}</div>
           <div class="row-val">${fmtMoney(tot)} Dhs</div>
         </div>`).join('')
-    : '<div class="empty">Aucune commande aujourd\'hui</div>';
+    : emptyMsg;
 
-  renderBaristaReport(orders);
+  renderBaristaReport(orders, dayLabelLower);
 
   // Recent orders (last 20)
   const recent = orders;
@@ -44,7 +71,7 @@ function renderToday() {
             <button onclick="cancelOrder(${o.num})" style="background:none;border:1px solid var(--red);border-radius:6px;padding:3px 10px;font-size:11px;color:var(--red);cursor:pointer;font-family:'Cinzel',serif;letter-spacing:0.5px;">Annuler</button>
           </div>
         </div>`).join('')
-    : '<div class="empty">Aucune commande aujourd\'hui</div>';
+    : emptyMsg;
 }
 
 async function cancelOrder(num) {

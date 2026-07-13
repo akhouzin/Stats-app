@@ -17,12 +17,14 @@
   body { background:var(--bg); color:var(--text); font-family:'Lato',sans-serif; min-height:100vh; padding-bottom:calc(72px + env(safe-area-inset-bottom)); overflow-x:hidden; max-width:100vw; }
 
   /* TOP BAR */
-  .topbar { background:var(--card); border-bottom:1px solid var(--border); padding:14px 18px; padding-top:calc(14px + env(safe-area-inset-top)); display:flex; align-items:center; justify-content:space-between; z-index:100; box-shadow:var(--shadow); flex-wrap:wrap; gap:6px; }
+  .topbar { position:relative; background:var(--card); border-bottom:1px solid var(--border); padding:14px 18px; padding-top:calc(14px + env(safe-area-inset-top)); display:flex; align-items:center; justify-content:flex-end; z-index:100; box-shadow:var(--shadow); flex-wrap:wrap; gap:6px; }
   .pending-banner { display:none; width:100%; background:#fffbe6; border:1px solid #f5e0a0; color:#92620a; font-family:'Cinzel',serif; font-size:10px; letter-spacing:1px; padding:7px 14px; border-radius:4px; align-items:center; gap:8px; }
   .pending-banner.visible { display:flex; }
+  .topbar-center { position:absolute; left:50%; top:calc(14px + env(safe-area-inset-top)); transform:translateX(-50%); text-align:center; pointer-events:none; }
   .topbar-title { font-family:'Cinzel',serif; font-size:16px; font-weight:700; letter-spacing:3px; color:var(--green-dark); }
   .topbar-sub { font-family:'Cinzel',serif; font-size:9px; color:var(--text-dim); letter-spacing:4px; text-transform:uppercase; }
   .topbar-time { font-family:'Cinzel',serif; font-size:11px; color:var(--text-dim); text-align:right; }
+  .topbar-clock { margin-top:2px; }
   .live-dot { display:inline-block; width:7px; height:7px; background:#1a7a3a; border-radius:50%; margin-right:4px; animation:pulse 1.5s infinite; }
   @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
 
@@ -184,6 +186,7 @@
   .sal-del-btn { background:none; border:1px solid var(--border); border-radius:6px; padding:4px 9px; font-size:11px; color:var(--red); cursor:pointer; }
   .sal-summary { display:flex; gap:5px; flex-wrap:wrap; padding:8px 0 4px; border-top:1px solid var(--border); }
   .sal-sum-chip { font-size:10px; font-weight:700; border-radius:10px; padding:3px 9px; }
+  .sal-chip-worked  { background:#dbeafe; color:#1e40af; }
   .sal-chip-paid    { background:#c8e6c9; color:#1b5e20; }
   .sal-chip-advance { background:#c5cae9; color:#1a237e; }
   .sal-chip-absent  { background:#ffcdd2; color:#b71c1c; }
@@ -204,6 +207,7 @@
   .sal-sheet-tr.sal-tr-weekend .sal-sheet-td-day { color:var(--red); background:#fff5f5; }
   .sal-sheet-cell { text-align:center; padding:5px 4px; cursor:pointer; font-size:11px; font-weight:700; border:1px solid #ccc; -webkit-tap-highlight-color:transparent; user-select:none; -webkit-user-select:none; touch-action:manipulation; white-space:nowrap; }
   .sal-sheet-cell:active { opacity:0.7; }
+  .sal-sc-worked  { background:#dbeafe; color:#1e40af; }
   .sal-sc-paid    { background:#c8e6c9; color:#1b5e20; }
   .sal-sc-adv     { background:#c5cae9; color:#1a237e; }
   .sal-sc-abs     { background:#ffcdd2; color:#b71c1c; }
