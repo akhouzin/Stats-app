@@ -185,7 +185,14 @@ function addLocation() {
   document.getElementById('loc-name-input').value = '';
   document.getElementById('loc-url-input').value  = '';
   document.getElementById('loc-test-result').textContent = '';
+  // Connect to the newly added location immediately — otherwise it just sits in
+  // the bookmark list while cp_api_url (the active connection) stays on whatever
+  // was connected before, and the dashboard keeps silently showing that old
+  // location's data. Mirrors the direct-tunnel-URL QR-scan branch below, which
+  // already auto-connects.
+  localStorage.setItem('cp_api_url', url);
   _renderLocList();
+  loadData();
 }
 
 async function testLocationUrl() {
