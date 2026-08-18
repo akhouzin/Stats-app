@@ -22,6 +22,7 @@
 
 // On first remote launch (GitHub Pages / APK) with no POS URL saved,
 // open the location picker immediately instead of making failing API calls.
+loadStatsBranding();
 if (getApiBase()) {
   loadData();
 } else {

@@ -65,6 +65,7 @@ function renderPage(idx) {
 
 async function loadData() {
   if (!getApiBase()) return;
+  loadStatsBranding();
   try {
     const [cancelledData, todayRaw] = await Promise.all([
       apiGet('/api/cancelled'),

@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-title" content="CP Stats">
 <link rel="apple-touch-icon" href="logo.png">
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400;1,600&family=Cinzel:wght@400;600;700&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
-<title>Coin Prestige — Stats</title>
+<title>ERPGEN — Stats</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <link rel="stylesheet" href="./styles/stats.css">
 </head>
@@ -16,8 +16,11 @@
 
 <div class="topbar">
   <div class="topbar-center">
-    <div class="topbar-title">Coin Prestige</div>
-    <div class="topbar-sub">Statistiques</div>
+    <img id="topbar-biz-logo" class="topbar-logo" alt="" style="display:none;">
+    <div class="topbar-text">
+      <div class="topbar-title" id="topbar-biz-name">ERPGEN</div>
+      <div class="topbar-sub" id="topbar-biz-sub">Statistiques</div>
+    </div>
   </div>
   <div class="topbar-time">
     <div><span class="live-dot"></span><span id="live-status">Chargement…</span></div>
@@ -244,6 +247,7 @@
 <!-- App layer — strict load order -->
 <script src="./app/local-api.js"></script>
 <script src="./app/location-picker.js"></script>
+<script src="./app/branding.js"></script>
 <script src="./app/state.js"></script>
 <script src="./app/helpers.js"></script>
 <script src="./app/data-loader.js"></script>

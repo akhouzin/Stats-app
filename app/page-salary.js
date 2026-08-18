@@ -39,13 +39,15 @@ function calcStaffStats(staffId, y, m, today, rate) {
   for (let d = 1; d <= daysInMonth; d++) {
     const date = new Date(y, m, d);
     const key = getSalDayKey(date);
-    const { base, amount } = parseSalStatus(data[key] || null);
+    let { base, amount } = parseSalStatus(data[key] || null);
+    // Unmarked past/today days default to "Travaillé" — mirrors legacy/app/employee-manager.js
+    if (base === null && date <= today) base = 'worked';
     const dayAmt = amount != null ? amount : rate;
     if (base === 'paid')         { stats.paid++;    stats.paidAmount    += dayAmt; }
     else if (base === 'advance') { stats.advance++; stats.advanceAmount += dayAmt; }
     else if (base === 'worked')  { stats.worked++;  stats.workedAmount  += dayAmt; }
     else if (base === 'absent')  stats.absent++;
-    else if (date <= today)      stats.pending++;
+    else                          stats.pending++;
   }
   return stats;
 }
@@ -78,7 +80,9 @@ function buildSharedTable(staff, y, m, today) {
 
     staff.forEach((s, i) => {
       const raw = staffData[i][key] || null;
-      const { base: status, amount: customAmt } = parseSalStatus(raw);
+      let { base: status, amount: customAmt } = parseSalStatus(raw);
+      // Unmarked past/today days default to "Travaillé" — mirrors legacy/app/employee-manager.js
+      if (status === null && !isFuture) status = 'worked';
       const rate = s.rate || 0;
       const dayPay = customAmt != null ? customAmt : rate;
       const hasCustom = (status === 'paid' || status === 'advance') && customAmt != null;
@@ -92,8 +96,6 @@ function buildSharedTable(staff, y, m, today) {
       else if (status === 'advance') { cls = 'sal-sc-adv';    sym = `${rateDisp}${badge}`; }
       else if (status === 'worked')  { cls = 'sal-sc-worked'; sym = 'T'; }
       else if (status === 'absent')  { cls = 'sal-sc-abs';    sym = 'ABS'; }
-      else if (isFuture)             { cls = 'sal-sc-future'; sym = '—'; }
-      else if (isToday)              { cls = 'sal-sc-today';  sym = '—'; }
       else                           { cls = 'sal-sc-future'; sym = '—'; }
       // Read-only cell — no touch/click handlers
       html += `<td class="sal-sheet-cell ${cls}">${sym}</td>`;

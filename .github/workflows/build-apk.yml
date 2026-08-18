@@ -1,0 +1,43 @@
+name: Build APK
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install Capacitor
+        run: npm install
+        working-directory: .
+
+      - name: Sync web assets into www/
+        run: node sync-www.js
+        working-directory: .
+
+      - name: Capacitor sync
+        run: npx cap sync android
+        working-directory: .
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Build release APK
+        run: ./gradlew assembleRelease
+        working-directory: android
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: erpgen-stats-apk
+          path: android/app/build/outputs/apk/release/app-release-unsigned.apk
