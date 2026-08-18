@@ -29,6 +29,15 @@
   <div id="pending-banner" class="pending-banner"></div>
 </div>
 
+<!-- DISCONNECTED / NO-POS SCREEN — shown when no restaurant is connected -->
+<div id="disconnected-screen" class="disconnected-screen" style="display:none;">
+  <div class="disc-mark">ERPGEN</div>
+  <div class="disc-title">Aucun POS connecté</div>
+  <div class="disc-desc">Connectez-vous à un restaurant pour afficher ses statistiques en direct.</div>
+  <button class="refresh-btn" onclick="openLocationModal()">+ Connecter un restaurant</button>
+  <div class="disc-footer">Système développé par ERPGEN</div>
+</div>
+
 <div class="pages-wrap" id="pages-wrap">
 <div class="pages-slider" id="pages-slider">
 

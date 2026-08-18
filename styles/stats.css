@@ -140,6 +140,14 @@
   /* EMPTY */
   .empty { text-align:center; padding:40px 20px; color:var(--text-dim); font-size:14px; font-style:italic; }
 
+  /* DISCONNECTED / NO-POS SCREEN */
+  .disconnected-screen { display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; min-height:calc(100vh - 160px); padding:40px 24px; gap:12px; }
+  .disc-mark { font-family:'Cinzel',serif; font-size:26px; font-weight:700; letter-spacing:7px; color:var(--green-dark); }
+  .disc-title { font-family:'Cormorant Garamond',serif; font-size:20px; font-weight:600; color:var(--text); margin-top:6px; }
+  .disc-desc { font-size:13px; color:var(--text-dim); max-width:300px; line-height:1.5; }
+  .disc-desc + .refresh-btn { margin-top:8px; }
+  .disc-footer { margin-top:26px; font-family:'Cinzel',serif; font-size:9px; letter-spacing:2px; text-transform:uppercase; color:var(--text-dim); }
+
   /* LOADING */
   .loading { text-align:center; padding:60px 20px; color:var(--text-dim); font-size:14px; }
   .spinner { display:inline-block; width:24px; height:24px; border:3px solid var(--border); border-top-color:var(--green-dark); border-radius:50%; animation:spin 0.7s linear infinite; margin-bottom:10px; }

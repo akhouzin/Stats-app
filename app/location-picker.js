@@ -47,6 +47,8 @@ function _saveLocations(list) {
 
         <div id="loc-list" style="margin-bottom:16px;"></div>
 
+        <div id="loc-disconnect-row" style="display:none;margin-bottom:16px;"></div>
+
         <div style="border-top:1px solid #eee;padding-top:14px;">
           <div style="font-size:12px;font-weight:600;color:#444;margin-bottom:8px;">Ajouter un restaurant</div>
 
@@ -139,6 +141,53 @@ function _renderLocList() {
         </div>
       </div>`;
   }).join('');
+
+  // Disconnect button — only shown while an active connection exists, so the
+  // user has a way back to the neutral/no-POS screen without deleting any of
+  // their saved locations (removeLocation() deletes; this just stops using one).
+  const discRow = document.getElementById('loc-disconnect-row');
+  if (discRow) {
+    discRow.style.display = active ? 'block' : 'none';
+    discRow.innerHTML = active ? `
+      <button onclick="disconnectLocation()"
+        style="width:100%;box-sizing:border-box;padding:9px 10px;border:1px solid #f0c2c2;border-radius:8px;cursor:pointer;background:#fdf3f3;color:#c62828;font-size:12px;font-weight:600;">
+        🔌 Se déconnecter — revenir à l'écran par défaut
+      </button>` : '';
+  }
+}
+
+// Shows the neutral "no POS connected" screen (ERPGEN default branding, no
+// data pages) and hides the dashboard. Used both on first launch with nothing
+// configured (app-init.js) and when the user explicitly disconnects below.
+function _showDisconnectedScreen() {
+  const screen = document.getElementById('disconnected-screen');
+  const wrap   = document.getElementById('pages-wrap');
+  const nav    = document.querySelector('.bottom-nav');
+  if (screen) screen.style.display = 'flex';
+  if (wrap)   wrap.style.display   = 'none';
+  if (nav)    nav.style.display    = 'none';
+  const status = document.getElementById('live-status');
+  if (status) status.textContent = 'Aucun POS configuré';
+}
+
+function _hideDisconnectedScreen() {
+  const screen = document.getElementById('disconnected-screen');
+  const wrap   = document.getElementById('pages-wrap');
+  const nav    = document.querySelector('.bottom-nav');
+  if (screen) screen.style.display = 'none';
+  if (wrap)   wrap.style.display   = '';
+  if (nav)    nav.style.display    = '';
+}
+
+// Clears the active connection (cp_api_url) without touching saved locations
+// — the dashboard falls back to the neutral ERPGEN-branded default screen,
+// same one shown on a completely fresh install with nothing configured yet.
+function disconnectLocation() {
+  localStorage.removeItem('cp_api_url');
+  loadStatsBranding(); // resets topbar name/logo/theme to the neutral ERPGEN default
+  _renderLocList();
+  closeLocationModal();
+  _showDisconnectedScreen();
 }
 
 function openLocationModal() {
@@ -161,6 +210,7 @@ function connectLocation(i) {
   localStorage.setItem('cp_api_url', list[i].url);
   _renderLocList();
   closeLocationModal();
+  _hideDisconnectedScreen();
   loadData();
 }
 
@@ -192,6 +242,7 @@ function addLocation() {
   // already auto-connects.
   localStorage.setItem('cp_api_url', url);
   _renderLocList();
+  _hideDisconnectedScreen();
   loadData();
 }
 
@@ -295,6 +346,7 @@ function _handleQRResult(rawValue) {
       }
       localStorage.setItem('cp_api_url', tunnelUrl);
       closeLocationModal();
+      _hideDisconnectedScreen();
       loadData();
       return;
     }

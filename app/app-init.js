@@ -26,7 +26,7 @@ loadStatsBranding();
 if (getApiBase()) {
   loadData();
 } else {
-  document.getElementById('live-status').textContent = 'Aucun POS configuré';
+  _showDisconnectedScreen();
   document.addEventListener('DOMContentLoaded', openLocationModal);
 }
 
