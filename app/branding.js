@@ -40,11 +40,36 @@ function _ensureStatsGoogleFont(name) {
   document.head.appendChild(l);
 }
 
+// Same fixed-delta lighten/darken as legacy/app/branding.js's _hexAdjust — Stats'
+// default palette (--card/--green-mid/--green-light) was itself derived from the
+// POS's own default bg using this exact formula, so reusing it here keeps a
+// custom bg producing the same relative shades instead of leaving them stuck on
+// the hardcoded defaults (the bug this fixes — most of the UI's surface area is
+// painted with --card/--green-mid/--green-light, not --bg directly).
+function _hexAdjustStats(hex, delta) {
+  hex = (hex || '').replace(/^#/, '');
+  if (hex.length === 3) hex = hex.split('').map(c => c + c).join('');
+  if (!/^[0-9a-f]{6}$/i.test(hex)) return null;
+  const clamp = v => Math.max(0, Math.min(255, v));
+  const r = clamp(parseInt(hex.slice(0, 2), 16) + delta);
+  const g = clamp(parseInt(hex.slice(2, 4), 16) + delta);
+  const b = clamp(parseInt(hex.slice(4, 6), 16) + delta);
+  return '#' + [r, g, b].map(n => n.toString(16).padStart(2, '0')).join('');
+}
+
 function _applyStatsThemeVars(theme) {
   const t = theme || _STATS_DEFAULT_BRANDING.theme;
   const rules = [];
   if (t.accent) rules.push(`--green-dark:${t.accent};`);
-  if (t.bg)     rules.push(`--bg:${t.bg};`);
+  if (t.bg) {
+    rules.push(`--bg:${t.bg};`);
+    const card  = _hexAdjustStats(t.bg, 12);
+    const mid   = _hexAdjustStats(t.bg, -7);
+    const light = _hexAdjustStats(t.bg, -14);
+    if (card)  rules.push(`--card:${card};`);
+    if (mid)   rules.push(`--green-mid:${mid};`);
+    if (light) rules.push(`--green-light:${light};`);
+  }
   if (t.topbar) rules.push(`--topbar-bg:${t.topbar};`);
   if (t.text)   rules.push(`--text:${t.text};`);
 
