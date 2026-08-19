@@ -1,6 +1,6 @@
 // ═══════════════════════════════════════
 // BRANDING — universal-client theming.
-// Pulls the connected POS's business name/tagline/logo + theme colors
+// Pulls the connected POS's business name/tagline/logo + theme colors/fonts
 // (via stats-server.js's /api/branding) and applies them to the Stats UI,
 // so any device that scans a POS's Cloudflare QR code sees that business's
 // identity. Falls back to a neutral default when no POS is connected
@@ -15,8 +15,30 @@ const _STATS_DEFAULT_BRANDING = {
   name: 'ERPGEN',
   tagline: 'Statistiques',
   logo: '',
-  theme: { accent: '', bg: '', topbar: '', text: '' },
+  theme: { accent: '', bg: '', topbar: '', text: '', ui_font: '', brand_font: '' },
 };
+
+// Same Google Fonts map as legacy/app/branding.js's _GF_MAP — kept in sync so a
+// POS's chosen fonts render identically on the Stats client.
+const _STATS_GF_MAP = {
+  'Inter':             'Inter:wght@300;400;700',
+  'Poppins':           'Poppins:wght@300;400;600;700',
+  'Raleway':           'Raleway:wght@300;400;600;700',
+  'Open Sans':         'Open+Sans:wght@300;400;600;700',
+  'Playfair Display':  'Playfair+Display:ital,wght@0,400;0,700;1,400',
+  'Josefin Sans':      'Josefin+Sans:wght@300;400;600;700',
+  'Montserrat':        'Montserrat:wght@300;400;600;700',
+};
+
+function _ensureStatsGoogleFont(name) {
+  if (!name || !_STATS_GF_MAP[name]) return;
+  const id = 'gf-' + name.replace(/\s+/g, '-').toLowerCase();
+  if (document.getElementById(id)) return;
+  const l = document.createElement('link');
+  l.id = id; l.rel = 'stylesheet';
+  l.href = `https://fonts.googleapis.com/css2?family=${_STATS_GF_MAP[name]}&display=swap`;
+  document.head.appendChild(l);
+}
 
 function _applyStatsThemeVars(theme) {
   const t = theme || _STATS_DEFAULT_BRANDING.theme;
@@ -32,7 +54,17 @@ function _applyStatsThemeVars(theme) {
     styleEl.id = 'stats-theme';
     document.head.appendChild(styleEl);
   }
-  styleEl.textContent = rules.length ? `:root{${rules.join('')}}` : '';
+  let css = rules.length ? `:root{${rules.join('')}}` : '';
+
+  _ensureStatsGoogleFont(t.ui_font);
+  _ensureStatsGoogleFont(t.brand_font);
+  // ui_font mirrors legacy's body/controls scope; brand_font mirrors its
+  // title/brand-surface scope (nav/logo/etc.) — here that's the topbar
+  // title and the disconnected-screen mark, the two "brand name" surfaces.
+  if (t.ui_font)    css += `body, button, input, select, textarea { font-family: '${t.ui_font}', sans-serif; }\n`;
+  if (t.brand_font) css += `.topbar-title, .topbar-sub, .disc-mark, .disc-title { font-family: '${t.brand_font}', serif !important; }\n`;
+
+  styleEl.textContent = css;
 }
 
 function applyStatsBranding(data) {
