@@ -15,8 +15,17 @@ const _STATS_DEFAULT_BRANDING = {
   name: 'ERPGEN',
   tagline: 'Statistiques',
   logo: '',
+  dayCycleStartHour: 0,
   theme: { accent: '', bg: '', topbar: '', text: '', ui_font: '', brand_font: '' },
 };
+
+// Connected POS's business-day cutover hour (legacy/app/branding.js:getDayCycleStartHour(),
+// 0 = midnight = original behavior). Read by helpers.js:getDayKey() so Stats buckets
+// orders into the same business-day boundaries the POS itself uses — a business open
+// past midnight (e.g. cycle starts 06:00) should see a 01:30 order counted as part of
+// the previous business day, same as it is in the POS's own Historique.
+let _statsDayCycleStartHour = 0;
+function getStatsDayCycleStartHour() { return _statsDayCycleStartHour; }
 
 // Same Google Fonts map as legacy/app/branding.js's _GF_MAP — kept in sync so a
 // POS's chosen fonts render identically on the Stats client.
@@ -95,6 +104,7 @@ function _applyStatsThemeVars(theme) {
 function applyStatsBranding(data) {
   const b = data || _STATS_DEFAULT_BRANDING;
   document.title = (b.name || _STATS_DEFAULT_BRANDING.name) + ' — Stats';
+  _statsDayCycleStartHour = Number(b.dayCycleStartHour) || 0;
 
   const nameEl = document.getElementById('topbar-biz-name');
   const subEl  = document.getElementById('topbar-biz-sub');

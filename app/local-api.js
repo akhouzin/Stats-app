@@ -66,10 +66,18 @@ async function apiDelete(path) {
   return r.json();
 }
 
+// Fast preliminary fetch used before fetchAllOrders() arrives — window is widened
+// to [yesterday 00:00, day-after-tomorrow 00:00) rather than literal calendar
+// midnight-to-midnight, since the POS's business day (helpers.js:getDayKey(),
+// shifted by its day-cycle-start hour) can start up to 23h before or extend up
+// to 23h past calendar midnight; this 3-day span safely covers "today"'s real
+// business-day boundaries for any cycle hour without needing to know the hour
+// ahead of this request. getDayKey() (once the hour has loaded via branding.js)
+// buckets this raw set into the correct day client-side, same as History does.
 async function fetchTodayOrders() {
   const now  = new Date();
-  const from = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
-  const to   = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).toISOString();
+  const from = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1).toISOString();
+  const to   = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 2).toISOString();
   return apiGet(`/api/orders?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`);
 }
 

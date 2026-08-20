@@ -1,8 +1,15 @@
 // ═══════════════════════════════════════
 // HELPERS
 // ═══════════════════════════════════════
+// Mirrors legacy/app/render-history.js's authoritative getDayKey() — shifts the
+// input Date back by the connected POS's day-cycle-start hour (branding.js:
+// getStatsDayCycleStartHour(), 0 by default) before formatting, so a business
+// open past midnight buckets Stats' "commandes"/history the same way the POS
+// itself does instead of splitting one continuous shift across two calendar days.
 function getDayKey(date) {
-  return date.toLocaleDateString('fr-MA', { year: 'numeric', month: '2-digit', day: '2-digit' });
+  const h = (typeof getStatsDayCycleStartHour === 'function') ? getStatsDayCycleStartHour() : 0;
+  const d = h > 0 ? new Date(date.getTime() - h * 3600000) : date;
+  return d.toLocaleDateString('fr-MA', { year: 'numeric', month: '2-digit', day: '2-digit' });
 }
 function fmtMoney(n) { return n.toFixed(2); }
 function fmtTime(date) { return date.toLocaleTimeString('fr-MA', { hour: '2-digit', minute: '2-digit' }); }
