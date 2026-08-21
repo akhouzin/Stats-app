@@ -144,18 +144,26 @@ function _hideSwitchTransition() {
 }
 
 // Wraps loadData() with the overlay above, holding it visible for a minimum
-// duration so a fast local response doesn't just flash the spinner.
+// duration so a fast local response doesn't just flash the spinner. Only
+// waits for loadData()'s FAST "today" phase, not its much heavier full-
+// history phase (entire order table, needed for month nav — no fixed
+// lookback limit, see data-loader.js) — that continues in the background
+// after the overlay fades, same as it already did on the 60s auto-refresh.
+// Waiting for the full phase here would mean every switch blocks on the
+// slowest possible query regardless of how little the user actually needs
+// right away.
 async function _switchWithTransition(name) {
   const started = Date.now();
   _showSwitchTransition(name);
-  try {
-    await loadData();
-  } finally {
-    const minShowMs = 450;
-    const elapsed   = Date.now() - started;
-    if (elapsed < minShowMs) await new Promise(r => setTimeout(r, minShowMs - elapsed));
-    _hideSwitchTransition();
-  }
+  await new Promise(resolve => {
+    let done = false;
+    const finish = () => { if (!done) { done = true; resolve(); } };
+    loadData(finish).finally(finish);
+  });
+  const minShowMs = 450;
+  const elapsed   = Date.now() - started;
+  if (elapsed < minShowMs) await new Promise(r => setTimeout(r, minShowMs - elapsed));
+  _hideSwitchTransition();
 }
 
 function _renderLocList() {

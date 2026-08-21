@@ -63,8 +63,16 @@ function renderPage(idx) {
   }
 }
 
-async function loadData() {
-  if (!getApiBase()) return;
+// loadData() has two phases of very different cost: "today" (small, fast —
+// one narrow date-range query) and "full history" (the entire unfiltered
+// mirror_orders table, needed for the Rapport/Recette/Salaire/Insights tabs'
+// month-over-month navigation, which has no fixed lookback limit). Callers
+// that just need the dashboard to be usable again (e.g. a Stats location
+// switch) can pass onTodayReady to be notified once the fast phase lands,
+// instead of waiting on the full-history phase too — see
+// Stats/app/location-picker.js:_switchWithTransition().
+async function loadData(onTodayReady) {
+  if (!getApiBase()) { if (typeof onTodayReady === 'function') onTodayReady(); return; }
   loadStatsBranding();
   try {
     const [cancelledData, todayRaw] = await Promise.all([
@@ -81,6 +89,7 @@ async function loadData() {
     renderToday();
     renderSalaire();
     renderRecette();
+    if (typeof onTodayReady === 'function') onTodayReady();
 
     document.getElementById('live-status').textContent = 'Chargement…';
     const allRaw = await fetchAllOrders();
@@ -95,6 +104,7 @@ async function loadData() {
   } catch (e) {
     console.error(e);
     document.getElementById('live-status').textContent = 'Erreur connexion';
+    if (typeof onTodayReady === 'function') onTodayReady();
   }
 }
 
