@@ -63,13 +63,94 @@ function renderPage(idx) {
   }
 }
 
+// ═══════════════════════════════════════
+// HISTORY WINDOW
+// ═══════════════════════════════════════
+// Of every page that reads allOrders, only page-recette.js's month
+// navigation (recMonthOffset) has no lower bound — a business can page back
+// indefinitely. Every other consumer's own range fits comfortably inside a
+// generous trailing window: page-today.js (max 7 days back), page-daily.js
+// (current month only), page-inventory.js (today/week/current-month
+// periods), page-salary.js (doesn't read allOrders at all), page-revenue.js
+// (no navigation control — just reflects whatever's currently loaded, same
+// as before, only now "whatever's loaded" is bounded instead of infinite).
+// So instead of always fetching the ENTIRE order history (the main cost
+// behind Stats feeling slow, and one that only ever grows), the initial
+// load is bounded to this window, and Recette's navigation lazily extends
+// it backward on demand via ensureOrdersLoadedThrough() — see that
+// function and changeRecMonth() (page-recette.js) for how.
+const HISTORY_WINDOW_MONTHS = 13;
+
+// Oldest date currently covered by allOrders. Once extended backward (by a
+// Recette navigation past the default window), this must never move
+// forward again for the life of the session — loadData()'s periodic
+// refresh re-fetches from THIS boundary, not the default window, precisely
+// so a user looking at month -18 doesn't have that data silently vanish out
+// from under them on the next 60s auto-refresh. The cost of that is real
+// (the periodic refresh re-fetches however far back the session has ever
+// gone) but it's proportional to what this specific session actually
+// looked at, not to the store's total lifetime order count.
+let _historyLoadedFrom = null;
+
+let _cancelledKeysCache = null;   // reused by ensureOrdersLoadedThrough() — avoids its own /api/cancelled round trip
+let _historyExtendPromise = null; // in-flight guard — overlapping callers await the same fetch instead of racing
+
+function _historyWindowStart() {
+  const d = new Date();
+  d.setMonth(d.getMonth() - HISTORY_WINDOW_MONTHS);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+function _farFutureCutoff() {
+  const d = new Date();
+  d.setDate(d.getDate() + 2); // safely past "today" regardless of timezone
+  return d;
+}
+
+// Extends allOrders backward to cover targetDate, if it isn't already —
+// no-op when targetDate is already within the loaded window (the common
+// case, since most navigation stays recent). Appends the newly-fetched
+// (strictly older) chunk to the end of allOrders rather than re-sorting —
+// the server already returns each range newest-first, and everything in
+// this chunk is by construction older than everything already loaded, so
+// the array's existing newest-first order is preserved.
+async function ensureOrdersLoadedThrough(targetDate) {
+  if (_historyLoadedFrom && targetDate >= _historyLoadedFrom) return;
+  if (_historyExtendPromise) return _historyExtendPromise;
+
+  const gapEnd = _historyLoadedFrom || _farFutureCutoff();
+  // Fetch a full extra window at once (not just the exact gap) so paging
+  // back one month at a time doesn't turn into one network round trip per
+  // click — same width as the initial load.
+  const gapStart = new Date(targetDate);
+  gapStart.setMonth(gapStart.getMonth() - HISTORY_WINDOW_MONTHS);
+
+  _historyExtendPromise = (async () => {
+    const statusEl = document.getElementById('live-status');
+    const prevStatus = statusEl ? statusEl.textContent : null;
+    if (statusEl) statusEl.textContent = "Chargement de l'historique…";
+    try {
+      const raw = await fetchOrdersRange(gapStart, gapEnd);
+      const olderOrders = mapOrders(raw, _cancelledKeysCache || new Set());
+      allOrders = allOrders.concat(olderOrders);
+      _historyLoadedFrom = gapStart;
+      _ordersStamp++;
+      clearConsumptionCache();
+    } finally {
+      if (statusEl) statusEl.textContent = prevStatus;
+      _historyExtendPromise = null;
+    }
+  })();
+  return _historyExtendPromise;
+}
+
 // loadData() has two phases of very different cost: "today" (small, fast —
-// one narrow date-range query) and "full history" (the entire unfiltered
-// mirror_orders table, needed for the Rapport/Recette/Salaire/Insights tabs'
-// month-over-month navigation, which has no fixed lookback limit). Callers
-// that just need the dashboard to be usable again (e.g. a Stats location
-// switch) can pass onTodayReady to be notified once the fast phase lands,
-// instead of waiting on the full-history phase too — see
+// one narrow date-range query) and "history" (bounded to HISTORY_WINDOW_MONTHS
+// by default, or however far a Recette navigation has already extended it —
+// see above). Callers that just need the dashboard to be usable again (e.g.
+// a Stats location switch) can pass onTodayReady to be notified once the
+// fast phase lands, instead of waiting on the history phase too — see
 // Stats/app/location-picker.js:_switchWithTransition().
 async function loadData(onTodayReady) {
   if (!getApiBase()) { if (typeof onTodayReady === 'function') onTodayReady(); return; }
@@ -82,6 +163,7 @@ async function loadData(onTodayReady) {
     ]);
 
     const cancelledKeys = new Set(cancelledData.map(r => `${r.num}|${r.dateKey}`));
+    _cancelledKeysCache = cancelledKeys;
     allOrders = mapOrders(todayRaw, cancelledKeys);
     _ordersStamp++;
 
@@ -92,8 +174,15 @@ async function loadData(onTodayReady) {
     if (typeof onTodayReady === 'function') onTodayReady();
 
     document.getElementById('live-status').textContent = 'Chargement…';
-    const allRaw = await fetchAllOrders();
+    // Never shrink back to the default window once extended — see
+    // _historyLoadedFrom's comment above for why.
+    const defaultStart = _historyWindowStart();
+    const windowStart = (_historyLoadedFrom && _historyLoadedFrom < defaultStart)
+      ? _historyLoadedFrom
+      : defaultStart;
+    const allRaw = await fetchOrdersRange(windowStart, _farFutureCutoff());
     allOrders = mapOrders(allRaw, cancelledKeys);
+    _historyLoadedFrom = windowStart;
     _ordersStamp++;
     clearConsumptionCache();
     historyLoaded = true;

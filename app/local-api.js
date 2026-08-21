@@ -66,7 +66,7 @@ async function apiDelete(path) {
   return r.json();
 }
 
-// Fast preliminary fetch used before fetchAllOrders() arrives — window is widened
+// Fast preliminary fetch used before the full history window arrives — widened
 // to [yesterday 00:00, day-after-tomorrow 00:00) rather than literal calendar
 // midnight-to-midnight, since the POS's business day (helpers.js:getDayKey(),
 // shifted by its day-cycle-start hour) can start up to 23h before or extend up
@@ -81,8 +81,14 @@ async function fetchTodayOrders() {
   return apiGet(`/api/orders?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`);
 }
 
-async function fetchAllOrders() {
-  return apiGet('/api/orders');
+// Bounded order-history range fetch. Replaces the old unconditional
+// "fetch literally every order ever" call — that cost only ever grows as a
+// business accumulates history, and was the main reason Stats felt slow to
+// load independent of compression. data-loader.js decides the actual window
+// (a default trailing period, extended backward on demand when Recette's
+// month navigation pages past it) — see its HISTORY_WINDOW_MONTHS.
+async function fetchOrdersRange(fromDate, toDate) {
+  return apiGet(`/api/orders?from=${encodeURIComponent(fromDate.toISOString())}&to=${encodeURIComponent(toDate.toISOString())}`);
 }
 
 async function fetchMarcCategories() {
