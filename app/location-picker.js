@@ -95,6 +95,69 @@ function _saveLocations(list) {
   });
 })();
 
+// ═══════════════════════════════════════
+// SWITCH TRANSITION — brief full-screen overlay shown while loadData() fetches
+// the newly-connected POS's data, so switching restaurants reads as one
+// deliberate motion instead of the dashboard's numbers jumping mid-view.
+// Self-contained (own injected styles/markup), same inline-JS convention as
+// the rest of this file rather than stats.css classes.
+// ═══════════════════════════════════════
+
+function _switchTransitionEl() {
+  let el = document.getElementById('loc-switch-transition');
+  if (el) return el;
+
+  const styleTag = document.createElement('style');
+  styleTag.textContent = `@keyframes locSwitchSpin { to { transform: rotate(360deg); } }`;
+  document.head.appendChild(styleTag);
+
+  el = document.createElement('div');
+  el.id = 'loc-switch-transition';
+  el.style.cssText = `
+    position:fixed;inset:0;z-index:10001;background:#14261a;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    opacity:0;pointer-events:none;transition:opacity .28s ease;
+  `;
+  el.innerHTML = `
+    <div style="width:34px;height:34px;border-radius:50%;
+      border:3px solid rgba(255,255,255,0.18);border-top-color:#81c784;
+      animation:locSwitchSpin .7s linear infinite;margin-bottom:14px;"></div>
+    <div id="loc-switch-label" style="font-family:'Cinzel',serif;font-size:13px;
+      letter-spacing:1px;color:#fff;opacity:.9;"></div>
+  `;
+  document.body.appendChild(el);
+  return el;
+}
+
+function _showSwitchTransition(name) {
+  const el = _switchTransitionEl();
+  document.getElementById('loc-switch-label').textContent = name ? `Connexion à ${name}…` : 'Connexion…';
+  el.style.pointerEvents = 'auto';
+  requestAnimationFrame(() => { el.style.opacity = '1'; });
+}
+
+function _hideSwitchTransition() {
+  const el = document.getElementById('loc-switch-transition');
+  if (!el) return;
+  el.style.opacity = '0';
+  el.style.pointerEvents = 'none';
+}
+
+// Wraps loadData() with the overlay above, holding it visible for a minimum
+// duration so a fast local response doesn't just flash the spinner.
+async function _switchWithTransition(name) {
+  const started = Date.now();
+  _showSwitchTransition(name);
+  try {
+    await loadData();
+  } finally {
+    const minShowMs = 450;
+    const elapsed   = Date.now() - started;
+    if (elapsed < minShowMs) await new Promise(r => setTimeout(r, minShowMs - elapsed));
+    _hideSwitchTransition();
+  }
+}
+
 function _renderLocList() {
   const list    = _getLocations();
   const active  = localStorage.getItem('cp_api_url') || '';
@@ -204,14 +267,14 @@ function closeLocationModal() {
   document.getElementById('loc-modal').style.display = 'none';
 }
 
-function connectLocation(i) {
+async function connectLocation(i) {
   const list = _getLocations();
   if (!list[i]) return;
   localStorage.setItem('cp_api_url', list[i].url);
   _renderLocList();
   closeLocationModal();
   _hideDisconnectedScreen();
-  loadData();
+  await _switchWithTransition(list[i].name);
 }
 
 function removeLocation(i) {
@@ -223,7 +286,7 @@ function removeLocation(i) {
   _renderLocList();
 }
 
-function addLocation() {
+async function addLocation() {
   const name = document.getElementById('loc-name-input').value.trim();
   const url  = document.getElementById('loc-url-input').value.trim().replace(/\/$/, '');
   if (!name) { alert('Entrez un nom pour ce restaurant.'); return; }
@@ -243,7 +306,7 @@ function addLocation() {
   localStorage.setItem('cp_api_url', url);
   _renderLocList();
   _hideDisconnectedScreen();
-  loadData();
+  await _switchWithTransition(name);
 }
 
 async function testLocationUrl() {
@@ -335,9 +398,11 @@ function _handleQRResult(rawValue) {
     }
 
     if (u.protocol === 'https:' || u.protocol === 'http:') {
-      // Direct tunnel URL — auto-save with hostname as name and connect immediately
+      // Direct tunnel URL — auto-save with hostname as name and connect immediately.
+      // Keep any path segment (e.g. /db/<id>) — that's how a non-default database
+      // on a shared tunnel is addressed, see legacy/stats-server/stats-server.js.
       stopQRScan();
-      const tunnelUrl = u.origin;
+      const tunnelUrl = u.origin + u.pathname.replace(/\/$/, '');
       const autoName  = u.hostname;
       const list = _getLocations();
       if (!list.some(l => l.url === tunnelUrl)) {
@@ -347,7 +412,7 @@ function _handleQRResult(rawValue) {
       localStorage.setItem('cp_api_url', tunnelUrl);
       closeLocationModal();
       _hideDisconnectedScreen();
-      loadData();
+      _switchWithTransition(autoName);
       return;
     }
 
