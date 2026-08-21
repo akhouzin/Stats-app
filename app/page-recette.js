@@ -14,7 +14,16 @@ async function changeRecMonth(dir) {
   recMonthOffset += dir;
   const now = new Date();
   const targetMonthStart = new Date(now.getFullYear(), now.getMonth() + recMonthOffset, 1);
-  await ensureOrdersLoadedThrough(targetMonthStart);
+  try {
+    await ensureOrdersLoadedThrough(targetMonthStart);
+  } catch (e) {
+    // A failed fetch must not leave recMonthOffset (already incremented
+    // above) out of sync with what's on screen — render with whatever's
+    // currently loaded (that month may show as empty/incomplete) rather
+    // than silently freezing the page on a network hiccup. The gap stays
+    // unfetched, so the next navigation into it will simply retry.
+    console.error('[recette] failed to load older history', e);
+  }
   renderRecette();
 }
 
