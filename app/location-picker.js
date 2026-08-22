@@ -23,70 +23,53 @@ function _saveLocations(list) {
     if (topbar) {
       const btn = document.createElement('button');
       btn.id    = 'loc-settings-btn';
+      btn.className = 'loc-settings-btn';
       btn.title = 'Changer de restaurant';
       btn.textContent = '⚙';
-      btn.style.cssText = 'background:none;border:none;font-size:18px;cursor:pointer;opacity:0.6;padding:4px 8px;';
       btn.onclick = openLocationModal;
       topbar.prepend(btn);
     }
 
     const modal = document.createElement('div');
     modal.id = 'loc-modal';
-    modal.style.cssText = `
-      display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);
-      z-index:9999;align-items:center;justify-content:center;
-    `;
+    modal.className = 'loc-modal';
     modal.innerHTML = `
-      <div style="background:#fff;border-radius:12px;padding:24px;width:min(440px,92vw);box-shadow:0 8px 32px rgba(0,0,0,0.2);max-height:90vh;overflow-y:auto;">
-        <div style="font-family:'Cinzel',serif;font-size:13px;letter-spacing:1px;color:#1a2a1a;margin-bottom:4px;">
-          CHOISIR UN RESTAURANT
-        </div>
-        <div style="font-size:11px;color:#999;margin-bottom:16px;">
-          Sélectionnez un POS ou ajoutez-en un nouveau.
-        </div>
+      <div class="loc-modal-box">
+        <div class="loc-modal-title">CHOISIR UN RESTAURANT</div>
+        <div class="loc-modal-subtitle">Sélectionnez un POS ou ajoutez-en un nouveau.</div>
 
-        <div id="loc-list" style="margin-bottom:16px;"></div>
+        <div id="loc-list" class="loc-list"></div>
 
-        <div id="loc-disconnect-row" style="display:none;margin-bottom:16px;"></div>
+        <div id="loc-disconnect-row" style="display:none;"></div>
 
-        <div style="border-top:1px solid #eee;padding-top:14px;">
-          <div style="font-size:12px;font-weight:600;color:#444;margin-bottom:8px;">Ajouter un restaurant</div>
+        <div class="loc-add-section">
+          <div class="loc-section-label">Ajouter un restaurant</div>
 
-          <div id="loc-scan-section" style="display:none;margin-bottom:12px;">
-            <div style="position:relative;border-radius:8px;overflow:hidden;background:#000;">
-              <video id="loc-scan-video" autoplay playsinline muted style="width:100%;display:block;max-height:220px;object-fit:cover;"></video>
+          <div id="loc-scan-section" class="loc-scan-section" style="display:none;">
+            <div class="loc-scan-box">
+              <video id="loc-scan-video" class="loc-scan-video" autoplay playsinline muted></video>
               <canvas id="loc-scan-canvas" style="display:none;"></canvas>
-              <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;">
-                <div style="width:160px;height:160px;border:2px solid rgba(255,255,255,0.85);border-radius:10px;box-shadow:0 0 0 9999px rgba(0,0,0,0.38);"></div>
-              </div>
+              <div class="loc-scan-frame"><div class="loc-scan-frame-box"></div></div>
             </div>
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-top:7px;">
-              <span id="loc-scan-status" style="font-size:12px;color:#666;">Pointez la caméra sur le QR code du POS</span>
-              <button onclick="stopQRScan()" style="padding:5px 12px;border:1px solid #ddd;border-radius:6px;cursor:pointer;font-size:12px;background:#fff;white-space:nowrap;">✕ Annuler</button>
+            <div class="loc-scan-foot">
+              <span id="loc-scan-status" class="loc-scan-status">Pointez la caméra sur le QR code du POS</span>
+              <button class="loc-btn-cancel-scan" onclick="stopQRScan()">✕ Annuler</button>
             </div>
           </div>
 
-          <button onclick="startQRScan()" id="loc-scan-btn"
-            style="width:100%;box-sizing:border-box;padding:11px 10px;border:1.5px dashed #bbb;border-radius:8px;cursor:pointer;background:#fafafa;font-size:13px;color:#555;margin-bottom:10px;text-align:center;font-family:inherit;">
+          <button onclick="startQRScan()" id="loc-scan-btn" class="loc-scan-btn">
             📷 Scanner le QR code du POS
           </button>
-          <div style="text-align:center;font-size:11px;color:#ccc;margin:-4px 0 10px 0;">— ou entrez l'URL manuellement —</div>
+          <div id="loc-scan-msg" class="loc-test-result loc-scan-msg"></div>
+          <div class="loc-or-sep">— ou entrez l'URL manuellement —</div>
 
-          <input id="loc-name-input" type="text" placeholder="Nom (ex: Barbeqa Agadir)"
-            style="width:100%;box-sizing:border-box;padding:9px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;margin-bottom:8px;">
-          <input id="loc-url-input" type="url" placeholder="https://stats.monrestaurant.com"
-            style="width:100%;box-sizing:border-box;padding:9px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;margin-bottom:8px;">
-          <div id="loc-test-result" style="font-size:12px;min-height:16px;margin-bottom:10px;color:#666;"></div>
-          <div style="display:flex;gap:8px;">
-            <button onclick="testLocationUrl()" style="padding:8px 14px;border:1px solid #ddd;border-radius:6px;cursor:pointer;background:#f5f5f5;font-size:13px;">
-              Tester
-            </button>
-            <button onclick="addLocation()" style="flex:1;padding:8px 14px;border:none;border-radius:6px;cursor:pointer;background:#1a2a1a;color:#fff;font-size:13px;font-weight:600;">
-              + Ajouter
-            </button>
-            <button onclick="closeLocationModal()" style="padding:8px 14px;border:1px solid #ddd;border-radius:6px;cursor:pointer;background:#f5f5f5;font-size:13px;">
-              Fermer
-            </button>
+          <input id="loc-name-input" class="loc-input" type="text" placeholder="Nom (ex: Barbeqa Agadir)">
+          <input id="loc-url-input" class="loc-input" type="url" placeholder="https://stats.monrestaurant.com">
+          <div id="loc-test-result" class="loc-test-result"></div>
+          <div class="loc-actions">
+            <button class="loc-btn-test" onclick="testLocationUrl()">Tester</button>
+            <button class="loc-btn-add" onclick="addLocation()">+ Ajouter</button>
+            <button class="loc-btn-close" onclick="closeLocationModal()">Fermer</button>
           </div>
         </div>
       </div>
@@ -173,45 +156,35 @@ function _renderLocList() {
   if (!el) return;
 
   if (list.length === 0) {
-    el.innerHTML = `<div style="font-size:12px;color:#bbb;text-align:center;padding:12px 0;">
+    el.innerHTML = `<div class="loc-empty">
+      <span class="loc-empty-icon">📍</span>
       Aucun restaurant enregistré.<br>Ajoutez-en un ci-dessous.
     </div>`;
-    return;
-  }
-
-  el.innerHTML = list.map((loc, i) => {
-    const isActive = loc.url === active;
-    const shareLink = `https://akhouzin.github.io/Stats-app/?add=${encodeURIComponent(loc.name)}&url=${encodeURIComponent(loc.url)}`;
-    return `
-      <div style="border-radius:8px;margin-bottom:8px;background:${isActive ? '#f0f7f0' : '#fafafa'};border:1px solid ${isActive ? '#81c784' : '#eee'};">
-        <div style="display:flex;align-items:center;gap:8px;padding:10px 12px;">
-          <div style="flex:1;min-width:0;">
-            <div style="font-size:13px;font-weight:600;color:#1a2a1a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
-              ${isActive ? '✓ ' : ''}${loc.name}
+  } else {
+    el.innerHTML = list.map((loc, i) => {
+      const isActive = loc.url === active;
+      const shareLink = `https://akhouzin.github.io/Stats-app/?add=${encodeURIComponent(loc.name)}&url=${encodeURIComponent(loc.url)}`;
+      return `
+        <div class="loc-item${isActive ? ' loc-item-active' : ''}">
+          <div class="loc-item-row">
+            <div class="loc-item-info">
+              <div class="loc-item-name">${isActive ? '<span class="loc-item-active-dot"></span>' : ''}${loc.name}</div>
+              <div class="loc-item-url">${loc.url}</div>
             </div>
-            <div style="font-size:10px;color:#999;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${loc.url}</div>
+            <button onclick="connectLocation(${i})" class="loc-btn-connect${isActive ? ' loc-btn-active' : ''}">
+              ${isActive ? 'Actif' : 'Connecter'}
+            </button>
+            <button onclick="removeLocation(${i})" class="loc-btn-remove">✕</button>
           </div>
-          <button onclick="connectLocation(${i})"
-            style="padding:6px 12px;border:none;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;white-space:nowrap;
-              background:${isActive ? '#4caf50' : '#1a2a1a'};color:#fff;">
-            ${isActive ? 'Actif' : 'Connecter'}
-          </button>
-          <button onclick="removeLocation(${i})"
-            style="padding:6px 8px;border:1px solid #eee;border-radius:6px;cursor:pointer;font-size:12px;background:#fff;color:#c62828;">
-            ✕
-          </button>
-        </div>
-        <div style="border-top:1px solid ${isActive ? '#c8e6c9' : '#eee'};padding:8px 12px;display:flex;align-items:center;gap:8px;">
-          <input readonly value="${shareLink}"
-            style="flex:1;font-size:10px;font-family:monospace;padding:5px 7px;border:1px solid #ddd;border-radius:5px;background:#fff;color:#666;min-width:0;"
-            onclick="this.select();" />
-          <button onclick="navigator.clipboard.writeText('${shareLink.replace(/'/g,"\\'")}').then(()=>{this.textContent='✓';setTimeout(()=>this.textContent='Copier lien',1500)})"
-            style="padding:5px 10px;border:1px solid #ddd;border-radius:5px;cursor:pointer;font-size:11px;background:#fff;white-space:nowrap;">
-            Copier lien
-          </button>
-        </div>
-      </div>`;
-  }).join('');
+          <div class="loc-share-row">
+            <input readonly value="${shareLink}" class="loc-share-input" onclick="this.select();" />
+            <button onclick="navigator.clipboard.writeText('${shareLink.replace(/'/g,"\\'")}').then(()=>{this.textContent='✓';setTimeout(()=>this.textContent='Copier lien',1500)})" class="loc-btn-copy">
+              Copier lien
+            </button>
+          </div>
+        </div>`;
+    }).join('');
+  }
 
   // Disconnect button — only shown while an active connection exists, so the
   // user has a way back to the neutral/no-POS screen without deleting any of
@@ -220,8 +193,7 @@ function _renderLocList() {
   if (discRow) {
     discRow.style.display = active ? 'block' : 'none';
     discRow.innerHTML = active ? `
-      <button onclick="disconnectLocation()"
-        style="width:100%;box-sizing:border-box;padding:9px 10px;border:1px solid #f0c2c2;border-radius:8px;cursor:pointer;background:#fdf3f3;color:#c62828;font-size:12px;font-weight:600;">
+      <button onclick="disconnectLocation()" class="loc-disconnect-btn">
         🔌 Se déconnecter — revenir à l'écran par défaut
       </button>` : '';
   }
@@ -261,18 +233,35 @@ function disconnectLocation() {
   _showDisconnectedScreen();
 }
 
+function _setLocResult(msg, kind) {
+  const el = document.getElementById('loc-test-result');
+  if (!el) return;
+  el.textContent = msg;
+  el.classList.remove('loc-test-ok', 'loc-test-err');
+  if (kind) el.classList.add(kind === 'ok' ? 'loc-test-ok' : 'loc-test-err');
+}
+
+function _setScanMsg(msg) {
+  const el = document.getElementById('loc-scan-msg');
+  if (!el) return;
+  el.textContent = msg;
+  el.classList.toggle('loc-status-err', !!msg);
+  el.style.display = msg ? 'flex' : 'none';
+}
+
 function openLocationModal() {
   stopQRScan();
   document.getElementById('loc-url-input').value  = '';
   document.getElementById('loc-name-input').value = '';
-  document.getElementById('loc-test-result').textContent = '';
+  _setLocResult('');
+  _setScanMsg('');
   _renderLocList();
-  document.getElementById('loc-modal').style.display = 'flex';
+  document.getElementById('loc-modal').classList.add('loc-modal-open');
 }
 
 function closeLocationModal() {
   stopQRScan();
-  document.getElementById('loc-modal').style.display = 'none';
+  document.getElementById('loc-modal').classList.remove('loc-modal-open');
 }
 
 async function connectLocation(i) {
@@ -297,15 +286,15 @@ function removeLocation(i) {
 async function addLocation() {
   const name = document.getElementById('loc-name-input').value.trim();
   const url  = document.getElementById('loc-url-input').value.trim().replace(/\/$/, '');
-  if (!name) { alert('Entrez un nom pour ce restaurant.'); return; }
-  if (!url)  { alert('Entrez l\'URL du tunnel Cloudflare.'); return; }
+  if (!name) { _setLocResult('Entrez un nom pour ce restaurant.', 'err'); return; }
+  if (!url)  { _setLocResult("Entrez l'URL du tunnel Cloudflare.", 'err'); return; }
   const list = _getLocations();
-  if (list.some(l => l.url === url)) { alert('Cette URL est déjà enregistrée.'); return; }
+  if (list.some(l => l.url === url)) { _setLocResult('Cette URL est déjà enregistrée.', 'err'); return; }
   list.push({ name, url });
   _saveLocations(list);
   document.getElementById('loc-name-input').value = '';
   document.getElementById('loc-url-input').value  = '';
-  document.getElementById('loc-test-result').textContent = '';
+  _setLocResult('');
   // Connect to the newly added location immediately — otherwise it just sits in
   // the bookmark list while cp_api_url (the active connection) stays on whatever
   // was connected before, and the dashboard keeps silently showing that old
@@ -318,25 +307,22 @@ async function addLocation() {
 }
 
 async function testLocationUrl() {
-  const input  = document.getElementById('loc-url-input');
-  const result = document.getElementById('loc-test-result');
-  const url    = (input.value.trim().replace(/\/$/, '') || 'http://127.0.0.1:3721') + '/api/menu-items';
-  result.textContent = 'Test en cours…';
-  result.style.color = '#666';
+  const input = document.getElementById('loc-url-input');
+  const url   = (input.value.trim().replace(/\/$/, '') || 'http://127.0.0.1:3721') + '/api/menu-items';
+  _setLocResult('');
+  const el = document.getElementById('loc-test-result');
+  if (el) el.innerHTML = '<span class="loc-mini-spinner"></span> Test en cours…';
   try {
     const ctrl = new AbortController();
     setTimeout(() => ctrl.abort(), 5000);
     const r = await fetch(url, { signal: ctrl.signal });
     if (r.ok) {
-      result.textContent = '✓ Connexion réussie';
-      result.style.color = '#1b5e20';
+      _setLocResult('✓ Connexion réussie', 'ok');
     } else {
-      result.textContent = `✗ Erreur ${r.status}`;
-      result.style.color = '#c62828';
+      _setLocResult(`✗ Erreur ${r.status}`, 'err');
     }
   } catch {
-    result.textContent = '✗ Impossible de se connecter';
-    result.style.color = '#c62828';
+    _setLocResult('✗ Impossible de se connecter', 'err');
   }
 }
 
@@ -352,8 +338,9 @@ let _scanStream = null;
 let _scanRaf    = null;
 
 async function startQRScan() {
+  _setScanMsg('');
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-    alert('Caméra non disponible sur ce navigateur.');
+    _setScanMsg('Caméra non disponible sur ce navigateur.');
     return;
   }
   try {
@@ -361,7 +348,7 @@ async function startQRScan() {
       video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 } }
     });
   } catch (e) {
-    alert('Accès caméra refusé : ' + e.message);
+    _setScanMsg('Accès caméra refusé : ' + e.message);
     return;
   }
 
