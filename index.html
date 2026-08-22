@@ -38,6 +38,17 @@
   <div class="disc-footer">Système développé par ERPGEN</div>
 </div>
 
+<!-- STARTUP CHOOSER — forces an explicit pick on every launch when 2+ restaurants are saved -->
+<div id="startup-chooser-screen" class="startup-chooser" style="display:none;">
+  <div class="sc-card">
+    <div class="sc-mark">ERPGEN</div>
+    <div class="sc-title">Choisissez un restaurant</div>
+    <div class="sc-desc">Plusieurs restaurants sont enregistrés sur cet appareil.</div>
+    <div id="sc-list" class="sc-list"></div>
+    <button class="sc-manage-btn" onclick="openLocationModal()">⚙ Gérer les restaurants</button>
+  </div>
+</div>
+
 <div class="pages-wrap" id="pages-wrap">
 <div class="pages-slider" id="pages-slider">
 

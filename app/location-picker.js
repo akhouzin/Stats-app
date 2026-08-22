@@ -17,17 +17,31 @@ function _saveLocations(list) {
   localStorage.setItem(_LOC_KEY, JSON.stringify(list));
 }
 
+// Deterministic per-restaurant color + initial, used for the topbar switcher
+// chip and every location row/card so multiple restaurants stay visually
+// distinguishable at a glance (same idea as a Slack/Notion workspace avatar).
+const _LOC_PALETTE = ['#1a7a3a', '#2f6690', '#8b5e3c', '#6a4c93', '#b8860b', '#3a6351', '#a4508b'];
+function _locColor(name) {
+  const s = String(name || '');
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+  return _LOC_PALETTE[h % _LOC_PALETTE.length];
+}
+function _locInitial(name) {
+  const s = String(name || '').trim();
+  return s ? s.charAt(0).toUpperCase() : '?';
+}
+
 (function injectLocationPickerUI() {
   document.addEventListener('DOMContentLoaded', () => {
     const topbar = document.querySelector('.topbar-right') || document.querySelector('.topbar');
     if (topbar) {
       const btn = document.createElement('button');
       btn.id    = 'loc-settings-btn';
-      btn.className = 'loc-settings-btn';
-      btn.title = 'Changer de restaurant';
-      btn.textContent = '⚙';
+      btn.className = 'loc-avatar loc-settings-btn';
       btn.onclick = openLocationModal;
       topbar.prepend(btn);
+      _renderSwitcherChip();
     }
 
     const modal = document.createElement('div');
@@ -167,8 +181,9 @@ function _renderLocList() {
       return `
         <div class="loc-item${isActive ? ' loc-item-active' : ''}">
           <div class="loc-item-row">
+            <span class="loc-avatar" style="background:${_locColor(loc.name)}">${_locInitial(loc.name)}</span>
             <div class="loc-item-info">
-              <div class="loc-item-name">${isActive ? '<span class="loc-item-active-dot"></span>' : ''}${loc.name}</div>
+              <div class="loc-item-name">${loc.name}${isActive ? ' <span class="loc-item-badge">Actif</span>' : ''}</div>
               <div class="loc-item-url">${loc.url}</div>
             </div>
             <button onclick="connectLocation(${i})" class="loc-btn-connect${isActive ? ' loc-btn-active' : ''}">
@@ -197,12 +212,35 @@ function _renderLocList() {
         🔌 Se déconnecter — revenir à l'écran par défaut
       </button>` : '';
   }
+
+  _renderSwitcherChip();
+}
+
+// Topbar trigger: shows the active restaurant's monogram avatar so the
+// current context is always visible at a glance, or a neutral ⚙ when
+// nothing is connected. Kept in sync from every call site that touches the
+// active connection, via _renderLocList() above.
+function _renderSwitcherChip() {
+  const btn = document.getElementById('loc-settings-btn');
+  if (!btn) return;
+  const active = localStorage.getItem('cp_api_url') || '';
+  const loc = _getLocations().find(l => l.url === active);
+  if (loc) {
+    btn.style.background = _locColor(loc.name);
+    btn.textContent = _locInitial(loc.name);
+    btn.title = `${loc.name} — changer de restaurant`;
+  } else {
+    btn.style.background = '';
+    btn.textContent = '⚙';
+    btn.title = 'Choisir un restaurant';
+  }
 }
 
 // Shows the neutral "no POS connected" screen (ERPGEN default branding, no
 // data pages) and hides the dashboard. Used both on first launch with nothing
 // configured (app-init.js) and when the user explicitly disconnects below.
 function _showDisconnectedScreen() {
+  _hideStartupChooser();
   const screen = document.getElementById('disconnected-screen');
   const wrap   = document.getElementById('pages-wrap');
   const nav    = document.querySelector('.bottom-nav');
@@ -214,6 +252,7 @@ function _showDisconnectedScreen() {
 }
 
 function _hideDisconnectedScreen() {
+  _hideStartupChooser();
   const screen = document.getElementById('disconnected-screen');
   const wrap   = document.getElementById('pages-wrap');
   const nav    = document.querySelector('.bottom-nav');
@@ -222,15 +261,72 @@ function _hideDisconnectedScreen() {
   if (nav)    nav.style.display    = '';
 }
 
-// Clears the active connection (cp_api_url) without touching saved locations
-// — the dashboard falls back to the neutral ERPGEN-branded default screen,
-// same one shown on a completely fresh install with nothing configured yet.
+// ═══════════════════════════════════════
+// STARTUP CHOOSER — forces an explicit restaurant pick on every app open
+// when 2+ are saved on this device, instead of silently reusing whatever
+// cp_api_url happened to be active last. Wired from app-init.js's boot gate
+// and from disconnectLocation() below (disconnecting with several saved
+// restaurants should offer to pick a different one, not just go neutral).
+// ═══════════════════════════════════════
+
+function _renderStartupChooser() {
+  const list   = _getLocations();
+  const active = localStorage.getItem('cp_api_url') || '';
+  const el     = document.getElementById('sc-list');
+  if (!el) return;
+  el.innerHTML = list.map((loc, i) => `
+    <button class="sc-item" onclick="_chooseStartupLocation(${i})">
+      <span class="loc-avatar" style="background:${_locColor(loc.name)}">${_locInitial(loc.name)}</span>
+      <span class="sc-item-info">
+        <span class="sc-item-name">${loc.name}</span>
+        <span class="sc-item-url">${loc.url}</span>
+      </span>
+      ${loc.url === active ? '<span class="sc-item-last">Dernier</span>' : ''}
+      <span class="sc-item-arrow">›</span>
+    </button>
+  `).join('');
+}
+
+function _showStartupChooser() {
+  _renderStartupChooser();
+  const screen = document.getElementById('startup-chooser-screen');
+  const disc   = document.getElementById('disconnected-screen');
+  const wrap   = document.getElementById('pages-wrap');
+  const nav    = document.querySelector('.bottom-nav');
+  if (disc)   disc.style.display   = 'none';
+  if (screen) screen.style.display = 'flex';
+  if (wrap)   wrap.style.display   = 'none';
+  if (nav)    nav.style.display    = 'none';
+}
+
+function _hideStartupChooser() {
+  const screen = document.getElementById('startup-chooser-screen');
+  if (screen) screen.style.display = 'none';
+}
+
+async function _chooseStartupLocation(i) {
+  const list = _getLocations();
+  if (!list[i]) return;
+  localStorage.setItem('cp_api_url', list[i].url);
+  _hideDisconnectedScreen(); // also hides the chooser itself + reveals the dashboard
+  _renderLocList();
+  await _switchWithTransition(list[i].name);
+}
+
+// Clears the active connection (cp_api_url) without touching saved locations.
+// With 2+ restaurants still saved, offers the startup chooser so the user can
+// immediately pick a different one; otherwise falls back to the neutral
+// ERPGEN-branded default screen, same one shown on a fresh install.
 function disconnectLocation() {
   localStorage.removeItem('cp_api_url');
   loadStatsBranding(); // resets topbar name/logo/theme to the neutral ERPGEN default
-  _renderLocList();
   closeLocationModal();
-  _showDisconnectedScreen();
+  _renderLocList();
+  if (_getLocations().length > 1) {
+    _showStartupChooser();
+  } else {
+    _showDisconnectedScreen();
+  }
 }
 
 function _setLocResult(msg, kind) {
@@ -407,6 +503,7 @@ function _handleQRResult(rawValue) {
       localStorage.setItem('cp_api_url', tunnelUrl);
       closeLocationModal();
       _hideDisconnectedScreen();
+      _renderLocList();
       _switchWithTransition(autoName);
       return;
     }

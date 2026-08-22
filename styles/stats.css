@@ -363,9 +363,12 @@
   .bsr-dot.out  { background:var(--red); }
   .bsr-dot.none { background:var(--border); }
 
-  /* LOCATION PICKER — "⚙" topbar settings button */
-  .loc-settings-btn { background:none; border:1px solid transparent; border-radius:8px; font-size:16px; line-height:1; cursor:pointer; opacity:0.55; padding:6px 9px; color:var(--green-dark); transition:opacity 0.15s, background 0.15s, transform 0.1s; }
-  .loc-settings-btn:hover { opacity:1; background:var(--green-mid); }
+  /* LOCATION PICKER — avatar-monogram shared style (topbar chip, list rows, startup chooser) */
+  .loc-avatar { display:flex; align-items:center; justify-content:center; border-radius:50%; color:#fff; font-family:'Cinzel',serif; font-weight:700; flex-shrink:0; letter-spacing:0; }
+
+  /* LOCATION PICKER — topbar trigger: circular avatar of the active restaurant (or a neutral ⚙ when none connected) */
+  .loc-settings-btn { width:30px; height:30px; font-size:13px; border:2px solid var(--card); box-shadow:0 0 0 1px var(--border); background:#c6ccc6; color:var(--green-dark); cursor:pointer; padding:0; margin:0; transition:transform 0.1s, box-shadow 0.15s; }
+  .loc-settings-btn:hover { box-shadow:0 0 0 1px var(--green); }
   .loc-settings-btn:active { transform:scale(0.92); }
 
   /* LOCATION PICKER — modal (multi-POS chooser / switcher) */
@@ -380,12 +383,13 @@
   .loc-empty { text-align:center; padding:26px 12px; color:var(--text-dim); font-size:12px; border:1px dashed var(--border); border-radius:10px; }
   .loc-empty-icon { font-size:22px; display:block; margin-bottom:6px; opacity:0.45; }
 
-  .loc-item { border-radius:10px; border:1px solid var(--border); background:var(--bg); transition:border-color 0.15s, background 0.15s; overflow:hidden; }
+  .loc-item { border-radius:12px; border:1px solid var(--border); background:var(--bg); transition:border-color 0.15s, background 0.15s; overflow:hidden; }
   .loc-item.loc-item-active { background:var(--green-mid); border-color:var(--green); }
-  .loc-item-row { display:flex; align-items:center; gap:10px; padding:11px 12px; }
+  .loc-item-row { display:flex; align-items:center; gap:11px; padding:12px; }
+  .loc-item-row .loc-avatar { width:38px; height:38px; font-size:14px; }
   .loc-item-info { flex:1; min-width:0; }
   .loc-item-name { font-family:'Cormorant Garamond',serif; font-size:15px; font-weight:700; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; display:flex; align-items:center; gap:6px; }
-  .loc-item-active-dot { width:7px; height:7px; border-radius:50%; background:var(--green); flex-shrink:0; }
+  .loc-item-badge { font-family:'Cinzel',serif; font-size:8px; font-weight:700; letter-spacing:1px; text-transform:uppercase; color:var(--green); background:#fff; border:1px solid #c8e6c9; border-radius:6px; padding:1px 5px; flex-shrink:0; }
   .loc-item-url { font-size:10.5px; color:var(--text-dim); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:1px; }
   .loc-btn-connect { padding:7px 13px; border:none; border-radius:7px; cursor:pointer; font-family:'Cinzel',serif; font-size:10px; font-weight:600; letter-spacing:0.5px; white-space:nowrap; background:var(--green-dark); color:#fff; transition:background 0.15s, transform 0.1s; }
   .loc-btn-connect:active { transform:scale(0.96); }
@@ -438,3 +442,23 @@
   .loc-btn-add:active { transform:scale(0.98); }
   .loc-btn-close { padding:9px 14px; border:1px solid var(--border); border-radius:8px; cursor:pointer; background:var(--bg); font-size:12.5px; color:var(--text-dim); transition:background 0.15s; }
   .loc-btn-close:hover { background:var(--green-mid); }
+
+  /* STARTUP CHOOSER — forced restaurant pick on every launch when 2+ are saved */
+  .startup-chooser { display:flex; align-items:center; justify-content:center; min-height:100vh; padding:24px 18px; }
+  .sc-card { width:min(420px,100%); background:var(--card); border-radius:18px; padding:28px 22px 22px; box-shadow:0 16px 44px rgba(0,0,0,0.14); border:1px solid var(--border); animation:scCardIn 0.32s cubic-bezier(0.16,1,0.3,1); }
+  @keyframes scCardIn { from { opacity:0; transform:translateY(10px) scale(0.98); } to { opacity:1; transform:translateY(0) scale(1); } }
+  .sc-mark { font-family:'Cinzel',serif; font-size:20px; font-weight:700; letter-spacing:6px; color:var(--green-dark); text-align:center; }
+  .sc-title { font-family:'Cormorant Garamond',serif; font-size:19px; font-weight:600; color:var(--text); text-align:center; margin-top:10px; }
+  .sc-desc { font-size:12px; color:var(--text-dim); text-align:center; margin-top:4px; margin-bottom:20px; }
+  .sc-list { display:flex; flex-direction:column; gap:9px; margin-bottom:16px; max-height:50vh; overflow-y:auto; -webkit-overflow-scrolling:touch; }
+  .sc-item { display:flex; align-items:center; gap:12px; width:100%; box-sizing:border-box; padding:12px 13px; border-radius:12px; border:1px solid var(--border); background:var(--bg); cursor:pointer; text-align:left; font-family:inherit; transition:border-color 0.15s, background 0.15s, transform 0.1s; }
+  .sc-item:hover { border-color:var(--green); background:var(--green-mid); }
+  .sc-item:active { transform:scale(0.98); }
+  .sc-item .loc-avatar { width:40px; height:40px; font-size:15px; }
+  .sc-item-info { flex:1; min-width:0; }
+  .sc-item-name { font-family:'Cormorant Garamond',serif; font-size:16px; font-weight:700; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .sc-item-url { font-size:10.5px; color:var(--text-dim); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:1px; }
+  .sc-item-last { font-family:'Cinzel',serif; font-size:8px; font-weight:700; letter-spacing:1px; text-transform:uppercase; color:var(--green); background:#fff; border:1px solid #c8e6c9; border-radius:6px; padding:2px 6px; flex-shrink:0; white-space:nowrap; }
+  .sc-item-arrow { font-size:16px; color:var(--text-dim); flex-shrink:0; opacity:0.5; }
+  .sc-manage-btn { width:100%; box-sizing:border-box; padding:10px; border:1px dashed var(--border); border-radius:10px; cursor:pointer; background:none; font-size:11.5px; color:var(--text-dim); font-family:inherit; transition:border-color 0.15s, color 0.15s, background 0.15s; }
+  .sc-manage-btn:hover { border-color:var(--green); color:var(--green-dark); background:var(--green-mid); }

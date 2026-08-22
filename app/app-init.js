@@ -4,12 +4,14 @@
 
 // Handle QR deep-link: ?add=RestaurantName&url=https://...
 // Scanned from the POS tunnel modal — auto-saves the location and connects.
-(function handleQRDeepLink() {
+// Returns whether it actually connected, so the multi-restaurant gate below
+// can skip itself: a deep link is already an explicit "use this one" choice.
+const _deepLinkConnected = (function handleQRDeepLink() {
   try {
     const params = new URLSearchParams(location.search);
     const name   = params.get('add');
     const url    = params.get('url');
-    if (!name || !url) return;
+    if (!name || !url) return false;
     const list = JSON.parse(localStorage.getItem('cp_locations') || '[]');
     if (!list.some(l => l.url === url)) {
       list.push({ name, url });
@@ -17,15 +19,23 @@
     }
     localStorage.setItem('cp_api_url', url);
     history.replaceState({}, '', location.pathname); // clean URL bar
-  } catch {}
+    return true;
+  } catch { return false; }
 })();
 
-// On first remote launch (GitHub Pages / APK) with no POS URL saved,
-// open the location picker immediately instead of making failing API calls.
 loadStatsBranding();
-if (getApiBase()) {
+const _savedLocations = (function () {
+  try { return JSON.parse(localStorage.getItem('cp_locations') || '[]'); } catch { return []; }
+})();
+if (!_deepLinkConnected && _savedLocations.length > 1) {
+  // 2+ restaurants saved on this device — always ask which one to use on
+  // open rather than silently reusing whatever was last active.
+  _showStartupChooser();
+} else if (getApiBase()) {
   loadData();
 } else {
+  // First remote launch (GitHub Pages / APK) with no POS URL saved yet —
+  // open the location picker immediately instead of making failing API calls.
   _showDisconnectedScreen();
   document.addEventListener('DOMContentLoaded', openLocationModal);
 }
