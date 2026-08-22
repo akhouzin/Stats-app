@@ -96,48 +96,45 @@ function _locInitial(name) {
 // SWITCH TRANSITION — brief full-screen overlay shown while loadData() fetches
 // the newly-connected POS's data, so switching restaurants reads as one
 // deliberate motion instead of the dashboard's numbers jumping mid-view.
-// Self-contained (own injected styles/markup), same inline-JS convention as
-// the rest of this file rather than stats.css classes.
+// Shows the target restaurant's own monogram avatar (same _locColor()/
+// _locInitial() used everywhere else in this file) so the transition itself
+// confirms *which* restaurant is being switched to. Styled via the
+// `.loc-switch-*` classes in stats.css, same as the rest of this file.
 // ═══════════════════════════════════════
 
 function _switchTransitionEl() {
   let el = document.getElementById('loc-switch-transition');
   if (el) return el;
 
-  const styleTag = document.createElement('style');
-  styleTag.textContent = `@keyframes locSwitchSpin { to { transform: rotate(360deg); } }`;
-  document.head.appendChild(styleTag);
-
   el = document.createElement('div');
   el.id = 'loc-switch-transition';
-  el.style.cssText = `
-    position:fixed;inset:0;z-index:10001;background:#14261a;
-    display:flex;flex-direction:column;align-items:center;justify-content:center;
-    opacity:0;pointer-events:none;transition:opacity .28s ease;
-  `;
+  el.className = 'loc-switch-overlay';
   el.innerHTML = `
-    <div style="width:34px;height:34px;border-radius:50%;
-      border:3px solid rgba(255,255,255,0.18);border-top-color:#81c784;
-      animation:locSwitchSpin .7s linear infinite;margin-bottom:14px;"></div>
-    <div id="loc-switch-label" style="font-family:'Cinzel',serif;font-size:13px;
-      letter-spacing:1px;color:#fff;opacity:.9;"></div>
+    <div class="loc-switch-eyebrow">Connexion en cours</div>
+    <div class="loc-switch-halo"><span id="loc-switch-avatar" class="loc-avatar loc-switch-avatar"></span></div>
+    <div id="loc-switch-label" class="loc-switch-name"></div>
+    <div class="loc-switch-sub">Un instant…</div>
   `;
   document.body.appendChild(el);
   return el;
 }
 
 function _showSwitchTransition(name) {
-  const el = _switchTransitionEl();
-  document.getElementById('loc-switch-label').textContent = name ? `Connexion à ${name}…` : 'Connexion…';
-  el.style.pointerEvents = 'auto';
-  requestAnimationFrame(() => { el.style.opacity = '1'; });
+  const el     = _switchTransitionEl();
+  const label  = document.getElementById('loc-switch-label');
+  const avatar = document.getElementById('loc-switch-avatar');
+  if (label)  label.textContent = name || 'Connexion…';
+  if (avatar) {
+    avatar.textContent = _locInitial(name);
+    avatar.style.background = _locColor(name || '');
+  }
+  el.classList.add('loc-switch-show');
 }
 
 function _hideSwitchTransition() {
   const el = document.getElementById('loc-switch-transition');
   if (!el) return;
-  el.style.opacity = '0';
-  el.style.pointerEvents = 'none';
+  el.classList.remove('loc-switch-show');
 }
 
 // Wraps loadData() with the overlay above, holding it visible for a minimum

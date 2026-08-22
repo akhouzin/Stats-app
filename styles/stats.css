@@ -468,3 +468,16 @@
   .sc-item-arrow { font-size:16px; color:var(--text-dim); flex-shrink:0; opacity:0.5; }
   .sc-manage-btn { width:100%; box-sizing:border-box; padding:10px; border:1px dashed var(--border); border-radius:10px; cursor:pointer; background:none; font-size:11.5px; color:var(--text-dim); font-family:inherit; transition:border-color 0.15s, color 0.15s, background 0.15s; }
   .sc-manage-btn:hover { border-color:var(--green); color:var(--green-dark); background:var(--green-mid); }
+
+  /* SWITCH TRANSITION — full-screen overlay shown while switching restaurants */
+  .loc-switch-overlay { position:fixed; inset:0; z-index:10001; background:radial-gradient(circle at 50% 38%, #1e3a27 0%, #0e1c13 72%); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px; opacity:0; pointer-events:none; transition:opacity 0.28s ease; }
+  .loc-switch-overlay.loc-switch-show { opacity:1; pointer-events:auto; }
+  .loc-switch-eyebrow { font-family:'Cinzel',serif; font-size:10px; font-weight:600; letter-spacing:3px; text-transform:uppercase; color:rgba(255,255,255,0.5); }
+  .loc-switch-halo { position:relative; width:78px; height:78px; display:flex; align-items:center; justify-content:center; margin:4px 0; }
+  .loc-switch-halo::before, .loc-switch-halo::after { content:''; position:absolute; inset:0; border-radius:50%; border:3px solid transparent; }
+  .loc-switch-halo::before { border-color:rgba(255,255,255,0.14); }
+  .loc-switch-halo::after { border-top-color:#81c784; border-right-color:#81c784; animation:locSwitchSpin 0.9s cubic-bezier(0.6,0.05,0.4,0.95) infinite; }
+  @keyframes locSwitchSpin { to { transform:rotate(360deg); } }
+  .loc-switch-avatar { width:56px; height:56px; font-size:21px; box-shadow:0 0 0 3px rgba(255,255,255,0.08); }
+  .loc-switch-name { font-family:'Cormorant Garamond',serif; font-size:21px; font-weight:700; color:#fff; text-align:center; padding:0 28px; max-width:340px; }
+  .loc-switch-sub { font-family:'Cinzel',serif; font-size:9px; letter-spacing:1.5px; text-transform:uppercase; color:rgba(255,255,255,0.38); margin-top:-6px; }
