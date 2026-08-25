@@ -68,8 +68,12 @@
       <div class="kpi"><div class="kpi-label">Articles vendus</div><div class="kpi-value" id="t-items">—</div><div class="kpi-sub">unités</div></div>
     </div>
     <div class="card">
-      <div class="card-title">Dernières commandes</div>
+      <div class="inv-period-bar" style="margin-bottom:12px;">
+        <button class="inv-period-btn" id="t-view-btn-orders" onclick="setTodayViewMode('orders')">Dernières Commandes</button>
+        <button class="inv-period-btn" id="t-view-btn-articles" onclick="setTodayViewMode('articles')">Articles Vendus</button>
+      </div>
       <div id="t-recent" class="scroll-list"></div>
+      <div id="t-articles" class="scroll-list" style="display:none;"></div>
     </div>
     <div class="card">
       <div class="card-title">Par Serveur — <span id="t-servers-title">Aujourd'hui</span></div>

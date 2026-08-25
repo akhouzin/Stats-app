@@ -2,10 +2,19 @@
 // TODAY
 // ═══════════════════════════════════════
 const TODAY_MAX_OFFSET = -7;
+let _todayViewMode = 'orders';
 
 function changeTodayDay(dir) {
   dayOffset = Math.max(TODAY_MAX_OFFSET, Math.min(0, dayOffset + dir));
   renderToday();
+}
+
+function setTodayViewMode(mode) {
+  _todayViewMode = mode;
+  document.getElementById('t-view-btn-orders').classList.toggle('active', mode === 'orders');
+  document.getElementById('t-view-btn-articles').classList.toggle('active', mode === 'articles');
+  document.getElementById('t-recent').style.display = mode === 'orders' ? 'block' : 'none';
+  document.getElementById('t-articles').style.display = mode === 'articles' ? 'block' : 'none';
 }
 
 function renderToday() {
@@ -55,6 +64,25 @@ function renderToday() {
     : emptyMsg;
 
   renderBaristaReport(orders, dayLabelLower);
+
+  // Articles sold (aggregated qty/revenue per article name)
+  const articleMap = {};
+  orders.forEach(o => o.items.forEach(i => {
+    const mi = menuItems.find(m => m.name === i.name);
+    if (!articleMap[i.name]) articleMap[i.name] = { qty: 0, revenue: 0 };
+    articleMap[i.name].qty += i.qty;
+    if (mi) articleMap[i.name].revenue += i.qty * mi.price;
+  }));
+  const articleEntries = Object.entries(articleMap).sort((a, b) => b[1].qty - a[1].qty);
+  document.getElementById('t-articles').innerHTML = articleEntries.length
+    ? articleEntries.map(([name, d]) => `
+        <div class="row">
+          <div class="row-name">${name} <span class="row-dim">×${d.qty}</span></div>
+          <div class="row-val">${fmtMoney(d.revenue)} Dhs</div>
+        </div>`).join('')
+    : emptyMsg;
+
+  setTodayViewMode(_todayViewMode);
 
   // Recent orders (last 20)
   const recent = orders;
