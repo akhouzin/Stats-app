@@ -91,11 +91,19 @@
   <div id="rapport-loading" class="loading"><div class="spinner"></div><span class="loading-text">Chargement…</span></div>
   <div id="rapport-content" style="display:none;">
     <div class="day-label" id="r-month-label" style="text-align:center;margin:12px 0 4px;">—</div>
-    <div class="kpi-grid">
+    <div class="inv-period-bar" style="margin-bottom:12px;">
+      <button class="inv-period-btn" id="r-view-btn-simple" onclick="setRapportViewMode('simple')">Résumé</button>
+      <button class="inv-period-btn" id="r-view-btn-detailed" onclick="setRapportViewMode('detailed')">Détails</button>
+    </div>
+    <div class="kpi-grid" id="r-kpi-simple">
       <div class="kpi"><div class="kpi-label">Commandes</div><div class="kpi-value" id="r-orders">—</div></div>
       <div class="kpi"><div class="kpi-label">Total</div><div class="kpi-value green" id="r-total">—</div><div class="kpi-sub">Dhs</div></div>
       <div class="kpi"><div class="kpi-label">Panier Moyen</div><div class="kpi-value" id="r-avg">—</div><div class="kpi-sub">Dhs / commande</div></div>
       <div class="kpi"><div class="kpi-label">Articles vendus</div><div class="kpi-value" id="r-units">—</div><div class="kpi-sub">unités</div></div>
+    </div>
+    <div class="card" id="r-kpi-detailed" style="display:none;">
+      <div class="card-title">Détails du mois</div>
+      <div id="r-detailed-rows"></div>
     </div>
     <div class="card">
       <div class="card-title">Articles vendus — ce mois</div>

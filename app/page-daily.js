@@ -1,6 +1,16 @@
 // ═══════════════════════════════════════
 // RAPPORT DU MOIS
 // ═══════════════════════════════════════
+let _rapportViewMode = 'simple';
+
+function setRapportViewMode(mode) {
+  _rapportViewMode = mode;
+  document.getElementById('r-view-btn-simple').classList.toggle('active', mode === 'simple');
+  document.getElementById('r-view-btn-detailed').classList.toggle('active', mode === 'detailed');
+  document.getElementById('r-kpi-simple').style.display = mode === 'simple' ? 'grid' : 'none';
+  document.getElementById('r-kpi-detailed').style.display = mode === 'detailed' ? 'block' : 'none';
+}
+
 function renderRapport() {
   document.getElementById('rapport-loading').style.display = 'none';
   document.getElementById('rapport-content').style.display = 'block';
@@ -17,8 +27,10 @@ function renderRapport() {
     document.getElementById('r-total').textContent = '0.00';
     document.getElementById('r-avg').textContent = '0.00';
     document.getElementById('r-units').textContent = '0';
+    document.getElementById('r-detailed-rows').innerHTML = '<div class="empty">Aucune commande ce mois</div>';
     document.getElementById('r-items').innerHTML = '<div class="empty">Aucune commande ce mois</div>';
     document.getElementById('r-consumption').innerHTML = '';
+    setRapportViewMode(_rapportViewMode);
     return;
   }
 
@@ -28,6 +40,47 @@ function renderRapport() {
   document.getElementById('r-total').textContent = fmtMoney(total);
   document.getElementById('r-avg').textContent = fmtMoney(total / orders.length);
   document.getElementById('r-units').textContent = units;
+
+  // Detailed breakdown — how the 4 headline numbers relate day-to-day and vs last month
+  const activeDayKeys = getUniqueDays(orders);
+  const activeDays = activeDayKeys.length;
+  const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+  const avgPerActiveDay = total / activeDays;
+  const ordersPerActiveDay = orders.length / activeDays;
+  const itemsPerOrder = units / orders.length;
+
+  const dayTotals = {};
+  orders.forEach(o => { const dk = getDayKey(o.time); dayTotals[dk] = (dayTotals[dk] || 0) + o.total; });
+  const [bestDayKey, bestDayTotal] = Object.entries(dayTotals).sort((a, b) => b[1] - a[1])[0];
+  const bestDayLabel = parseDay(bestDayKey).toLocaleDateString('fr-FR', { weekday: 'short', day: '2-digit', month: 'short' });
+
+  const prevMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  const prevOrders = allOrders.filter(o => o.time >= prevMonthStart && o.time < monthStart);
+  let trendHtml = '<span style="color:var(--text-dim);">Pas de données</span>';
+  if (prevOrders.length) {
+    const prevTotal = prevOrders.reduce((s, o) => s + o.total, 0);
+    const revDelta = prevTotal > 0 ? ((total - prevTotal) / prevTotal * 100) : null;
+    const cntDelta = ((orders.length - prevOrders.length) / prevOrders.length * 100);
+    const fmtDelta = d => d === null ? '—' : (d >= 0 ? '+' : '') + d.toFixed(0) + '%';
+    const colorOf = d => d === null ? 'var(--text-dim)' : (d >= 0 ? 'var(--green)' : 'var(--red)');
+    trendHtml = `<span style="color:${colorOf(revDelta)}">CA ${fmtDelta(revDelta)}</span> · <span style="color:${colorOf(cntDelta)}">Cmd ${fmtDelta(cntDelta)}</span>`;
+  }
+
+  const detailRows = [
+    ['Jours actifs', `${activeDays} / ${daysInMonth} jours`],
+    ['Encaissé / jour actif', `${fmtMoney(avgPerActiveDay)} Dhs`],
+    ['Commandes / jour actif', ordersPerActiveDay.toFixed(1)],
+    ['Articles / commande', itemsPerOrder.toFixed(1)],
+    ['Meilleur jour', `${bestDayLabel} — ${fmtMoney(bestDayTotal)} Dhs`],
+    ['Vs mois dernier', trendHtml],
+  ];
+  document.getElementById('r-detailed-rows').innerHTML = detailRows.map(([label, val]) => `
+      <div class="row">
+        <div class="row-name">${label}</div>
+        <div class="row-val">${val}</div>
+      </div>`).join('');
+
+  setRapportViewMode(_rapportViewMode);
 
   // Items
   const itemMap = {};
