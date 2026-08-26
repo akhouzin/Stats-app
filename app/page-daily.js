@@ -15,14 +15,19 @@ function renderRapport() {
   if (!orders.length) {
     document.getElementById('r-orders').textContent = '0';
     document.getElementById('r-total').textContent = '0.00';
+    document.getElementById('r-avg').textContent = '0.00';
+    document.getElementById('r-units').textContent = '0';
     document.getElementById('r-items').innerHTML = '<div class="empty">Aucune commande ce mois</div>';
     document.getElementById('r-consumption').innerHTML = '';
     return;
   }
 
   const total = orders.reduce((s, o) => s + o.total, 0);
+  const units = orders.reduce((s, o) => s + o.items.reduce((ss, i) => ss + i.qty, 0), 0);
   document.getElementById('r-orders').textContent = orders.length;
   document.getElementById('r-total').textContent = fmtMoney(total);
+  document.getElementById('r-avg').textContent = fmtMoney(total / orders.length);
+  document.getElementById('r-units').textContent = units;
 
   // Items
   const itemMap = {};
