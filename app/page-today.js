@@ -90,11 +90,16 @@ function renderToday() {
     ? recent.map(o => `
         <div class="live-order">
           <div class="live-order-top">
-            <span>N° ${String(o.num).padStart(4,'0')} — ${fmtTime(o.time)}</span>
-            <span>${fmtMoney(o.total)} Dhs</span>
+            <span>N° ${String(o.num).padStart(4,'0')}</span>
+            <span>${fmtTime(o.time)}</span>
           </div>
-          <div class="live-order-items">${o.items.map(i => `${i.name} ×${i.qty}`).join(' · ')}</div>
-          ${o.server !== '—' ? `<div style="font-size:11px;color:var(--text-dim);margin-top:3px;">${o.server}</div>` : ''}
+          ${o.server !== '—' ? `<div class="live-order-server">${o.server}</div>` : ''}
+          <div class="live-order-items">${o.items.map(i => `
+              <div class="live-order-item-row">
+                <span class="live-order-qtybadge">${i.qty}</span>
+                <span>${i.name}</span>
+              </div>`).join('')}</div>
+          <div class="live-order-total">${fmtMoney(o.total)} Dhs</div>
         </div>`).join('')
     : emptyMsg;
 }
