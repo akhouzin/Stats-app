@@ -126,13 +126,11 @@ function renderRapport() {
   setRapportViewMode(_rapportViewMode);
 
   // Items
-  const maxRev = sortedItems[0]?.[1].rev || 1;
   document.getElementById('r-items').innerHTML = sortedItems.map(([name, d]) => `
-      <div class="row">
-        <div><div class="row-name">${name}</div>
-          <div class="bar-wrap"><div class="bar-fill" style="width:${(d.rev/maxRev*100).toFixed(0)}%"></div></div>
-        </div>
-        <div class="row-right"><div class="row-val">×${d.qty}</div><div class="row-dim">${fmtMoney(d.rev)} Dhs</div></div>
+      <div class="ticket-item-row">
+        <span class="ticket-item-name">${name}</span>
+        <span class="ticket-item-qty">×${d.qty}</span>
+        <span class="ticket-item-price">${fmtMoney(d.rev)} Dhs</span>
       </div>`).join('');
 
   // Consumption

@@ -76,9 +76,10 @@ function renderToday() {
   const articleEntries = Object.entries(articleMap).sort((a, b) => b[1].qty - a[1].qty);
   document.getElementById('t-articles').innerHTML = articleEntries.length
     ? articleEntries.map(([name, d]) => `
-        <div class="row">
-          <div class="row-name">${name} <span class="row-dim">×${d.qty}</span></div>
-          <div class="row-val">${fmtMoney(d.revenue)} Dhs</div>
+        <div class="ticket-item-row">
+          <span class="ticket-item-name">${name}</span>
+          <span class="ticket-item-qty">×${d.qty}</span>
+          <span class="ticket-item-price">${fmtMoney(d.revenue)} Dhs</span>
         </div>`).join('')
     : emptyMsg;
 

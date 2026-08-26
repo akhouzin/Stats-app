@@ -111,10 +111,6 @@
   .rank.r2 { background:#666; }
   .rank.r3 { background:#8b5e3c; }
 
-  /* PROGRESS BAR */
-  .bar-wrap { background:var(--green-light); border-radius:4px; height:5px; margin-top:5px; }
-  .bar-fill { background:var(--green-dark); border-radius:4px; height:5px; transition:width 0.4s; }
-
   /* SERVER CHIP */
   .chip { display:inline-flex; align-items:center; gap:6px; background:var(--bg); border:1px solid var(--border); border-radius:20px; padding:5px 12px; font-size:12px; font-weight:600; margin:4px 4px 4px 0; }
 
@@ -138,6 +134,16 @@
   .live-order-item-row { display:flex; align-items:center; gap:8px; font-size:12px; color:#000; }
   .live-order-qtybadge { flex-shrink:0; min-width:20px; height:20px; display:flex; align-items:center; justify-content:center; background:#fff; color:#000; border:1.5px solid #000; font-size:11px; font-weight:900; border-radius:5px; }
   .live-order-total { font-weight:900; font-size:14px; color:#000; text-align:right; padding-top:6px; border-top:1px dashed #bbb; }
+
+  /* TICKET ITEM ROW — article-list rows styled like the POS's own printed
+     report line items (legacy/styles/pos.css .r-item-row/.r-item-name/
+     .r-item-qty/.r-item-price, see reports.js's "— Articles vendus —"
+     section). Shared by the Commandes tab's "Articles Vendus" view and the
+     Rapport tab's "Articles vendus — ce mois" list. */
+  .ticket-item-row { display:flex; justify-content:space-between; align-items:baseline; gap:4px; margin:4px 0; font-family:'Courier New',Courier,monospace; font-size:12px; font-weight:bold; color:#000; }
+  .ticket-item-name { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .ticket-item-qty { flex-shrink:0; min-width:30px; text-align:center; font-size:11px; }
+  .ticket-item-price { flex-shrink:0; min-width:60px; text-align:right; font-weight:900; }
 
 
   /* MONTH LABEL */
