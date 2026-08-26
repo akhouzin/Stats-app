@@ -95,17 +95,6 @@ function renderToday() {
           </div>
           <div class="live-order-items">${o.items.map(i => `${i.name} ×${i.qty}`).join(' · ')}</div>
           ${o.server !== '—' ? `<div style="font-size:11px;color:var(--text-dim);margin-top:3px;">${o.server}</div>` : ''}
-          <div style="margin-top:6px;text-align:right;">
-            <button onclick="cancelOrder(${o.num})" style="background:none;border:1px solid var(--red);border-radius:6px;padding:3px 10px;font-size:11px;color:var(--red);cursor:pointer;font-family:'Cinzel',serif;letter-spacing:0.5px;">Annuler</button>
-          </div>
         </div>`).join('')
     : emptyMsg;
-}
-
-async function cancelOrder(num) {
-  if (!confirm(`Annuler la commande N° ${String(num).padStart(4,'0')} ?`)) return;
-  const { error } = await sb.from('cancelled_orders').insert({ num });
-  if (error) { alert('Erreur: ' + error.message); return; }
-  allOrders = allOrders.filter(o => o.num !== num);
-  renderAll();
 }
