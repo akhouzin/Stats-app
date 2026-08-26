@@ -7,10 +7,10 @@ function setRapportViewMode(mode) {
   _rapportViewMode = mode;
   document.getElementById('r-view-btn-simple').classList.toggle('active', mode === 'simple');
   document.getElementById('r-view-btn-trends').classList.toggle('active', mode === 'trends');
-  document.getElementById('r-view-btn-performance').classList.toggle('active', mode === 'performance');
+  document.getElementById('r-view-btn-sales').classList.toggle('active', mode === 'sales');
   document.getElementById('r-kpi-simple').style.display = mode === 'simple' ? 'grid' : 'none';
   document.getElementById('r-kpi-trends').style.display = mode === 'trends' ? 'grid' : 'none';
-  document.getElementById('r-kpi-performance').style.display = mode === 'performance' ? 'grid' : 'none';
+  document.getElementById('r-kpi-sales').style.display = mode === 'sales' ? 'grid' : 'none';
 }
 
 function renderRapport() {
@@ -36,12 +36,12 @@ function renderRapport() {
     document.getElementById('r-best-day-amount').textContent = '—';
     document.getElementById('r-trend-ca').textContent = '—';
     document.getElementById('r-trend-cmd').textContent = '—';
-    document.getElementById('r-top-server').textContent = '—';
-    document.getElementById('r-top-server-amount').textContent = '—';
-    document.getElementById('r-second-server').textContent = '—';
-    document.getElementById('r-second-server-amount').textContent = '—';
-    document.getElementById('r-active-servers').textContent = '0';
-    document.getElementById('r-top-server-share').textContent = '—';
+    document.getElementById('r-top-article').textContent = '—';
+    document.getElementById('r-top-article-amount').textContent = '—';
+    document.getElementById('r-top-category').textContent = '—';
+    document.getElementById('r-top-category-amount').textContent = '—';
+    document.getElementById('r-avg-item-price').textContent = '0.00';
+    document.getElementById('r-multi-item-pct').textContent = '0%';
     document.getElementById('r-items').innerHTML = '<div class="empty">Aucune commande ce mois</div>';
     document.getElementById('r-consumption').innerHTML = '';
     setRapportViewMode(_rapportViewMode);
@@ -55,8 +55,18 @@ function renderRapport() {
   document.getElementById('r-avg').textContent = fmtMoney(total / orders.length);
   document.getElementById('r-units').textContent = units;
 
+  // Per-article revenue/qty — computed once here, reused by the Ventes tab's "Article Vedette"
+  // tile below and by the "Articles vendus" list further down.
+  const itemMap = {};
+  orders.forEach(o => o.items.forEach(item => {
+    if (!itemMap[item.name]) itemMap[item.name] = { qty: 0, rev: 0 };
+    itemMap[item.name].qty += item.qty;
+    itemMap[item.name].rev += item.price * item.qty;
+  }));
+  const sortedItems = Object.entries(itemMap).sort((a, b) => b[1].rev - a[1].rev);
+
   // Tendances — how the 4 headline numbers relate day-to-day and vs last month.
-  // Kept to exactly 4 tiles (same as #r-kpi-simple/#r-kpi-performance) so the toggle never
+  // Kept to exactly 4 tiles (same as #r-kpi-simple/#r-kpi-sales) so the toggle never
   // changes the grid's size/row-count — switching modes must not shift the cards below it.
   const activeDays = getUniqueDays(orders).length;
   const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
@@ -92,48 +102,30 @@ function renderRapport() {
     trendCmdEl.style.color = '';
   }
 
-  // Performance — who's driving this month's numbers (by-server revenue ranking)
-  const serverMap = {};
-  orders.forEach(o => {
-    if (!o.server || o.server === '—') return;
-    if (!serverMap[o.server]) serverMap[o.server] = { total: 0, count: 0 };
-    serverMap[o.server].total += o.total;
-    serverMap[o.server].count++;
-  });
-  const rankedServers = Object.entries(serverMap).sort((a, b) => b[1].total - a[1].total);
-  const topServerEl = document.getElementById('r-top-server');
-  const topServerAmtEl = document.getElementById('r-top-server-amount');
-  const secondServerEl = document.getElementById('r-second-server');
-  const secondServerAmtEl = document.getElementById('r-second-server-amount');
-  if (rankedServers.length) {
-    topServerEl.textContent = rankedServers[0][0];
-    topServerAmtEl.textContent = `${fmtMoney(rankedServers[0][1].total)} Dhs`;
-  } else {
-    topServerEl.textContent = '—';
-    topServerAmtEl.textContent = '—';
-  }
-  if (rankedServers.length > 1) {
-    secondServerEl.textContent = rankedServers[1][0];
-    secondServerAmtEl.textContent = `${fmtMoney(rankedServers[1][1].total)} Dhs`;
-  } else {
-    secondServerEl.textContent = '—';
-    secondServerAmtEl.textContent = rankedServers.length ? 'Aucun autre' : '—';
-  }
-  document.getElementById('r-active-servers').textContent = rankedServers.length;
-  document.getElementById('r-top-server-share').textContent = rankedServers.length
-    ? `${(rankedServers[0][1].total / total * 100).toFixed(0)}%`
-    : '—';
+  // Ventes — sales composition this month (works for a solo owner with no staff, unlike a
+  // server/staff breakdown which is meaningless when there's only ever one user).
+  const [topArticleName, topArticleData] = sortedItems[0] || [];
+  document.getElementById('r-top-article').textContent = topArticleName || '—';
+  document.getElementById('r-top-article-amount').textContent = topArticleData ? `${fmtMoney(topArticleData.rev)} Dhs` : '—';
+
+  const catMap = {};
+  orders.forEach(o => o.items.forEach(item => {
+    const mi = menuItems.find(m => m.name === item.name);
+    const cat = mi ? mi.cat : 'Autre';
+    catMap[cat] = (catMap[cat] || 0) + item.price * item.qty;
+  }));
+  const rankedCats = Object.entries(catMap).sort((a, b) => b[1] - a[1]);
+  document.getElementById('r-top-category').textContent = rankedCats.length ? rankedCats[0][0] : '—';
+  document.getElementById('r-top-category-amount').textContent = rankedCats.length ? `${fmtMoney(rankedCats[0][1])} Dhs` : '—';
+
+  document.getElementById('r-avg-item-price').textContent = fmtMoney(total / units);
+
+  const multiItemOrders = orders.filter(o => o.items.reduce((s, i) => s + i.qty, 0) > 1).length;
+  document.getElementById('r-multi-item-pct').textContent = `${(multiItemOrders / orders.length * 100).toFixed(0)}%`;
 
   setRapportViewMode(_rapportViewMode);
 
   // Items
-  const itemMap = {};
-  orders.forEach(o => o.items.forEach(item => {
-    if (!itemMap[item.name]) itemMap[item.name] = { qty: 0, rev: 0 };
-    itemMap[item.name].qty += item.qty;
-    itemMap[item.name].rev += item.price * item.qty;
-  }));
-  const sortedItems = Object.entries(itemMap).sort((a, b) => b[1].rev - a[1].rev);
   const maxRev = sortedItems[0]?.[1].rev || 1;
   document.getElementById('r-items').innerHTML = sortedItems.map(([name, d]) => `
       <div class="row">
