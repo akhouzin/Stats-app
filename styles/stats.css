@@ -140,10 +140,10 @@
      .r-item-qty/.r-item-price, see reports.js's "— Articles vendus —"
      section). Shared by the Commandes tab's "Articles Vendus" view and the
      Rapport tab's "Articles vendus — ce mois" list. */
-  .ticket-item-row { display:flex; justify-content:space-between; align-items:baseline; gap:4px; margin:4px 0; font-family:'Courier New',Courier,monospace; font-size:12px; font-weight:bold; color:#000; }
-  .ticket-item-name { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .ticket-item-qty { flex-shrink:0; min-width:30px; text-align:center; font-size:11px; }
-  .ticket-item-price { flex-shrink:0; min-width:60px; text-align:right; font-weight:900; }
+  .ticket-item-row { display:grid; grid-template-columns:1fr 44px 68px; align-items:baseline; gap:4px; margin:4px 0; font-family:'Courier New',Courier,monospace; font-size:12px; font-weight:bold; color:#000; }
+  .ticket-item-name { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .ticket-item-qty { text-align:center; font-size:11px; }
+  .ticket-item-price { text-align:right; font-weight:900; }
 
 
   /* MONTH LABEL */
