@@ -93,7 +93,8 @@
     <div class="day-label" id="r-month-label" style="text-align:center;margin:12px 0 4px;">—</div>
     <div class="inv-period-bar" style="margin-bottom:12px;">
       <button class="inv-period-btn" id="r-view-btn-simple" onclick="setRapportViewMode('simple')">Résumé</button>
-      <button class="inv-period-btn" id="r-view-btn-detailed" onclick="setRapportViewMode('detailed')">Détails</button>
+      <button class="inv-period-btn" id="r-view-btn-trends" onclick="setRapportViewMode('trends')">Tendances</button>
+      <button class="inv-period-btn" id="r-view-btn-performance" onclick="setRapportViewMode('performance')">Performance</button>
     </div>
     <div class="kpi-grid" id="r-kpi-simple">
       <div class="kpi"><div class="kpi-label">Commandes</div><div class="kpi-value" id="r-orders">—</div></div>
@@ -101,11 +102,17 @@
       <div class="kpi"><div class="kpi-label">Panier Moyen</div><div class="kpi-value" id="r-avg">—</div><div class="kpi-sub">Dhs / commande</div></div>
       <div class="kpi"><div class="kpi-label">Articles vendus</div><div class="kpi-value" id="r-units">—</div><div class="kpi-sub">unités</div></div>
     </div>
-    <div class="kpi-grid" id="r-kpi-detailed" style="display:none;">
+    <div class="kpi-grid" id="r-kpi-trends" style="display:none;">
       <div class="kpi"><div class="kpi-label">Encaissé / Jour Actif</div><div class="kpi-value" id="r-day-avg">—</div><div class="kpi-sub" id="r-active-days">—</div></div>
       <div class="kpi"><div class="kpi-label">Articles / Commande</div><div class="kpi-value" id="r-items-per-order">—</div><div class="kpi-sub">articles par commande</div></div>
       <div class="kpi"><div class="kpi-label">Meilleur Jour</div><div class="kpi-value" id="r-best-day">—</div><div class="kpi-sub" id="r-best-day-amount">—</div></div>
       <div class="kpi"><div class="kpi-label">Vs Mois Dernier</div><div class="kpi-value" id="r-trend-ca">—</div><div class="kpi-sub" id="r-trend-cmd">—</div></div>
+    </div>
+    <div class="kpi-grid" id="r-kpi-performance" style="display:none;">
+      <div class="kpi"><div class="kpi-label">Meilleur Vendeur</div><div class="kpi-value" id="r-top-server">—</div><div class="kpi-sub" id="r-top-server-amount">—</div></div>
+      <div class="kpi"><div class="kpi-label">2ème Vendeur</div><div class="kpi-value" id="r-second-server">—</div><div class="kpi-sub" id="r-second-server-amount">—</div></div>
+      <div class="kpi"><div class="kpi-label">Serveurs Actifs</div><div class="kpi-value" id="r-active-servers">—</div><div class="kpi-sub">ont vendu ce mois</div></div>
+      <div class="kpi"><div class="kpi-label">Part du Top Vendeur</div><div class="kpi-value" id="r-top-server-share">—</div><div class="kpi-sub">du chiffre d'affaires</div></div>
     </div>
     <div class="card">
       <div class="card-title">Articles vendus — ce mois</div>

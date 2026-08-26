@@ -6,9 +6,11 @@ let _rapportViewMode = 'simple';
 function setRapportViewMode(mode) {
   _rapportViewMode = mode;
   document.getElementById('r-view-btn-simple').classList.toggle('active', mode === 'simple');
-  document.getElementById('r-view-btn-detailed').classList.toggle('active', mode === 'detailed');
+  document.getElementById('r-view-btn-trends').classList.toggle('active', mode === 'trends');
+  document.getElementById('r-view-btn-performance').classList.toggle('active', mode === 'performance');
   document.getElementById('r-kpi-simple').style.display = mode === 'simple' ? 'grid' : 'none';
-  document.getElementById('r-kpi-detailed').style.display = mode === 'detailed' ? 'grid' : 'none';
+  document.getElementById('r-kpi-trends').style.display = mode === 'trends' ? 'grid' : 'none';
+  document.getElementById('r-kpi-performance').style.display = mode === 'performance' ? 'grid' : 'none';
 }
 
 function renderRapport() {
@@ -34,6 +36,12 @@ function renderRapport() {
     document.getElementById('r-best-day-amount').textContent = '—';
     document.getElementById('r-trend-ca').textContent = '—';
     document.getElementById('r-trend-cmd').textContent = '—';
+    document.getElementById('r-top-server').textContent = '—';
+    document.getElementById('r-top-server-amount').textContent = '—';
+    document.getElementById('r-second-server').textContent = '—';
+    document.getElementById('r-second-server-amount').textContent = '—';
+    document.getElementById('r-active-servers').textContent = '0';
+    document.getElementById('r-top-server-share').textContent = '—';
     document.getElementById('r-items').innerHTML = '<div class="empty">Aucune commande ce mois</div>';
     document.getElementById('r-consumption').innerHTML = '';
     setRapportViewMode(_rapportViewMode);
@@ -47,9 +55,9 @@ function renderRapport() {
   document.getElementById('r-avg').textContent = fmtMoney(total / orders.length);
   document.getElementById('r-units').textContent = units;
 
-  // Detailed breakdown — how the 4 headline numbers relate day-to-day and vs last month.
-  // Kept to exactly 4 tiles (same as #r-kpi-simple) so the toggle never changes the grid's
-  // size/row-count — switching modes must not shift the cards below it.
+  // Tendances — how the 4 headline numbers relate day-to-day and vs last month.
+  // Kept to exactly 4 tiles (same as #r-kpi-simple/#r-kpi-performance) so the toggle never
+  // changes the grid's size/row-count — switching modes must not shift the cards below it.
   const activeDays = getUniqueDays(orders).length;
   const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
   const itemsPerOrder = units / orders.length;
@@ -83,6 +91,38 @@ function renderRapport() {
     trendCmdEl.textContent = 'Pas de données';
     trendCmdEl.style.color = '';
   }
+
+  // Performance — who's driving this month's numbers (by-server revenue ranking)
+  const serverMap = {};
+  orders.forEach(o => {
+    if (!o.server || o.server === '—') return;
+    if (!serverMap[o.server]) serverMap[o.server] = { total: 0, count: 0 };
+    serverMap[o.server].total += o.total;
+    serverMap[o.server].count++;
+  });
+  const rankedServers = Object.entries(serverMap).sort((a, b) => b[1].total - a[1].total);
+  const topServerEl = document.getElementById('r-top-server');
+  const topServerAmtEl = document.getElementById('r-top-server-amount');
+  const secondServerEl = document.getElementById('r-second-server');
+  const secondServerAmtEl = document.getElementById('r-second-server-amount');
+  if (rankedServers.length) {
+    topServerEl.textContent = rankedServers[0][0];
+    topServerAmtEl.textContent = `${fmtMoney(rankedServers[0][1].total)} Dhs`;
+  } else {
+    topServerEl.textContent = '—';
+    topServerAmtEl.textContent = '—';
+  }
+  if (rankedServers.length > 1) {
+    secondServerEl.textContent = rankedServers[1][0];
+    secondServerAmtEl.textContent = `${fmtMoney(rankedServers[1][1].total)} Dhs`;
+  } else {
+    secondServerEl.textContent = '—';
+    secondServerAmtEl.textContent = rankedServers.length ? 'Aucun autre' : '—';
+  }
+  document.getElementById('r-active-servers').textContent = rankedServers.length;
+  document.getElementById('r-top-server-share').textContent = rankedServers.length
+    ? `${(rankedServers[0][1].total / total * 100).toFixed(0)}%`
+    : '—';
 
   setRapportViewMode(_rapportViewMode);
 
