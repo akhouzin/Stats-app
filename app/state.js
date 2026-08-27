@@ -3,6 +3,11 @@
 // ═══════════════════════════════════════
 let allOrders = [];
 let _ordersStamp = 0;
+// Bumped every time the active POS connection (cp_api_url) changes — lets
+// in-flight loadData()/ensureOrdersLoadedThrough() calls started against the
+// PREVIOUS location detect they're stale and refuse to commit their results
+// once they resolve. See location-picker.js:_activateLocation()/_deactivateLocation().
+let _locationEpoch = 0;
 let dayOffset = 0;
 let chartWeek = null, chartMonth = null;
 

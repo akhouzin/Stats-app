@@ -126,12 +126,21 @@ async function ensureOrdersLoadedThrough(targetDate) {
   const gapStart = new Date(targetDate);
   gapStart.setMonth(gapStart.getMonth() - HISTORY_WINDOW_MONTHS);
 
+  // Snapshot which POS connection this fetch belongs to — if the user
+  // switches restaurants (location-picker.js:_activateLocation()/
+  // _deactivateLocation()) while this request is in flight, _locationEpoch
+  // will have moved on by the time it resolves, and this result (belonging
+  // to the OLD restaurant) must be discarded rather than concat()'d onto the
+  // NEW restaurant's allOrders.
+  const myEpoch = _locationEpoch;
+
   _historyExtendPromise = (async () => {
     const statusEl = document.getElementById('live-status');
     const prevStatus = statusEl ? statusEl.textContent : null;
     if (statusEl) statusEl.textContent = "Chargement de l'historique…";
     try {
       const raw = await fetchOrdersRange(gapStart, gapEnd);
+      if (myEpoch !== _locationEpoch) return; // stale — a different POS is now active
       const olderOrders = mapOrders(raw, _cancelledKeysCache || new Set());
       allOrders = allOrders.concat(olderOrders);
       _historyLoadedFrom = gapStart;
@@ -151,16 +160,33 @@ async function ensureOrdersLoadedThrough(targetDate) {
 // see above). Callers that just need the dashboard to be usable again (e.g.
 // a Stats location switch) can pass onTodayReady to be notified once the
 // fast phase lands, instead of waiting on the history phase too — see
-// Stats/app/location-picker.js:_switchWithTransition().
+// Stats/app/location-picker.js:_switchWithTransition(). onTodayReady is
+// called with `true`/`false` (whether the "today" phase actually succeeded)
+// so a caller mid-switch can tell a failed connection apart from a real one
+// instead of silently showing the dashboard either way — the stale-epoch
+// bail-outs below call it with no argument, since those only ever belong to
+// a request that's since been superseded by a newer switch, not to a switch
+// still waiting on a result.
 async function loadData(onTodayReady) {
   if (!getApiBase()) { if (typeof onTodayReady === 'function') onTodayReady(); return; }
   loadStatsBranding();
+  // Snapshot which POS connection this call belongs to. Switching restaurants
+  // (location-picker.js:_activateLocation()/_deactivateLocation()) bumps
+  // _locationEpoch — if that happens while THIS call is still awaiting a
+  // response (e.g. a straggling 60s auto-refresh from the restaurant the
+  // user just switched AWAY from, or an overlapping switch-to-switch race),
+  // every check below stops it from overwriting allOrders/menuItems/etc with
+  // the wrong restaurant's data once it finally resolves. This was the cause
+  // of switching restaurants sometimes showing a mix of both, or the
+  // previous one's numbers, instead of the one just selected.
+  const myEpoch = _locationEpoch;
   try {
     const [cancelledData, todayRaw] = await Promise.all([
       apiGet('/api/cancelled'),
       fetchTodayOrders(),
       loadLocalData(),
     ]);
+    if (myEpoch !== _locationEpoch) { if (typeof onTodayReady === 'function') onTodayReady(); return; }
 
     const cancelledKeys = new Set(cancelledData.map(r => `${r.num}|${r.dateKey}`));
     _cancelledKeysCache = cancelledKeys;
@@ -171,9 +197,15 @@ async function loadData(onTodayReady) {
     renderToday();
     renderSalaire();
     renderRecette();
-    if (typeof onTodayReady === 'function') onTodayReady();
+    if (typeof onTodayReady === 'function') onTodayReady(true);
 
     document.getElementById('live-status').textContent = 'Chargement…';
+    // Lights the topbar switcher chip's sync dot for as long as the heavier
+    // history phase below is still running — see location-picker.js's
+    // _locSyncStart()/_locSyncEnd() (both are epoch-guarded, so a straggling
+    // call from a restaurant switched away from can't clear the dot for the
+    // one now actually loading, or vice versa).
+    if (typeof _locSyncStart === 'function') _locSyncStart(myEpoch);
     // Never shrink back to the default window once extended — see
     // _historyLoadedFrom's comment above for why.
     const defaultStart = _historyWindowStart();
@@ -181,19 +213,22 @@ async function loadData(onTodayReady) {
       ? _historyLoadedFrom
       : defaultStart;
     const allRaw = await fetchOrdersRange(windowStart, _farFutureCutoff());
+    if (myEpoch !== _locationEpoch) { if (typeof _locSyncEnd === 'function') _locSyncEnd(myEpoch); return; } // stale — a different POS is now active
     allOrders = mapOrders(allRaw, cancelledKeys);
     _historyLoadedFrom = windowStart;
     _ordersStamp++;
     clearConsumptionCache();
     historyLoaded = true;
     document.getElementById('live-status').textContent = 'En ligne';
+    if (typeof _locSyncEnd === 'function') _locSyncEnd(myEpoch);
 
     renderPage(currentPage);
 
   } catch (e) {
     console.error(e);
-    document.getElementById('live-status').textContent = 'Erreur connexion';
-    if (typeof onTodayReady === 'function') onTodayReady();
+    if (myEpoch === _locationEpoch) document.getElementById('live-status').textContent = 'Erreur connexion';
+    if (typeof _locSyncEnd === 'function') _locSyncEnd(myEpoch);
+    if (typeof onTodayReady === 'function') onTodayReady(false);
   }
 }
 

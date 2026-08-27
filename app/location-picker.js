@@ -10,6 +10,31 @@
 
 const _LOC_KEY = 'cp_locations';
 
+// Every switch of the active connection must go through these two helpers,
+// never a bare localStorage.setItem/removeItem('cp_api_url', ...) — bumping
+// _locationEpoch (state.js) is what lets data-loader.js's loadData()/
+// ensureOrdersLoadedThrough() detect a straggling response from the PREVIOUS
+// POS after a switch and discard it instead of overwriting the new POS's
+// data with it (was the cause of switching restaurants sometimes showing a
+// mix of both / the wrong one's numbers).
+function _activateLocation(url) {
+  _locationEpoch++;
+  // _historyLoadedFrom (data-loader.js) tracks how far back THIS restaurant's
+  // order history has been loaded — it must not carry over from whichever
+  // restaurant was active before (e.g. one previously paged far back via
+  // Recette navigation), or the newly-selected restaurant's first load would
+  // inherit that oversized window instead of its own default one.
+  _historyLoadedFrom = null;
+  historyLoaded = false;
+  localStorage.setItem('cp_api_url', url);
+}
+function _deactivateLocation() {
+  _locationEpoch++;
+  _historyLoadedFrom = null;
+  historyLoaded = false;
+  localStorage.removeItem('cp_api_url');
+}
+
 function _getLocations() {
   try { return JSON.parse(localStorage.getItem(_LOC_KEY) || '[]'); } catch { return []; }
 }
@@ -113,7 +138,7 @@ function _switchTransitionEl() {
     <div class="loc-switch-eyebrow">Connexion en cours</div>
     <div class="loc-switch-halo"><span id="loc-switch-avatar" class="loc-avatar loc-switch-avatar"></span></div>
     <div id="loc-switch-label" class="loc-switch-name"></div>
-    <div class="loc-switch-sub">Un instant…</div>
+    <div id="loc-switch-sub" class="loc-switch-sub">Un instant…</div>
   `;
   document.body.appendChild(el);
   return el;
@@ -123,6 +148,9 @@ function _showSwitchTransition(name) {
   const el     = _switchTransitionEl();
   const label  = document.getElementById('loc-switch-label');
   const avatar = document.getElementById('loc-switch-avatar');
+  const sub    = document.getElementById('loc-switch-sub');
+  el.classList.remove('loc-switch-error'); // clear any error state left over from a previous failed switch
+  if (sub)    sub.textContent = 'Un instant…';
   if (label)  label.textContent = name || 'Connexion…';
   if (avatar) {
     avatar.textContent = _locInitial(name);
@@ -137,27 +165,65 @@ function _hideSwitchTransition() {
   el.classList.remove('loc-switch-show');
 }
 
+// Briefly turns the overlay red and reports the failure before dismissing —
+// see stats.css's `.loc-switch-error` rules. Used only when the "today"
+// phase itself never landed (a real connection failure), not when only the
+// background history phase fails after the dashboard already switched over
+// successfully — see loadData()'s catch block in data-loader.js.
+function _showSwitchError() {
+  return new Promise(resolve => {
+    const el  = document.getElementById('loc-switch-transition');
+    const sub = document.getElementById('loc-switch-sub');
+    if (!el) { resolve(); return; }
+    el.classList.add('loc-switch-error');
+    if (sub) sub.textContent = 'Connexion impossible';
+    setTimeout(() => { _hideSwitchTransition(); resolve(); }, 1500);
+  });
+}
+
+// Toggles the topbar switcher chip's sync dot (stats.css: `.loc-syncing`)
+// while a just-switched restaurant's full order history is still loading in
+// the background. Both are epoch-guarded (state.js:_locationEpoch) so a
+// straggling call from a restaurant switched away from can't touch the dot
+// meant for whichever restaurant is actually active now.
+function _locSyncStart(epoch) {
+  const btn = document.getElementById('loc-settings-btn');
+  if (btn && epoch === _locationEpoch) btn.classList.add('loc-syncing');
+}
+function _locSyncEnd(epoch) {
+  const btn = document.getElementById('loc-settings-btn');
+  if (btn && epoch === _locationEpoch) btn.classList.remove('loc-syncing');
+}
+
 // Wraps loadData() with the overlay above, holding it visible for a minimum
 // duration so a fast local response doesn't just flash the spinner. Only
 // waits for loadData()'s FAST "today" phase, not its much heavier full-
 // history phase (entire order table, needed for month nav — no fixed
 // lookback limit, see data-loader.js) — that continues in the background
-// after the overlay fades, same as it already did on the 60s auto-refresh.
+// after the overlay fades, same as it already did on the 60s auto-refresh
+// (now reflected by the switcher chip's sync dot instead of being invisible).
 // Waiting for the full phase here would mean every switch blocks on the
 // slowest possible query regardless of how little the user actually needs
-// right away.
+// right away. Returns whether the switch actually succeeded, so a failed
+// connection shows the red error state instead of quietly landing on
+// whatever (stale) data happened to already be on screen.
 async function _switchWithTransition(name) {
   const started = Date.now();
   _showSwitchTransition(name);
-  await new Promise(resolve => {
+  const ok = await new Promise(resolve => {
     let done = false;
-    const finish = () => { if (!done) { done = true; resolve(); } };
+    const finish = (success) => { if (!done) { done = true; resolve(success !== false); } };
     loadData(finish).finally(finish);
   });
   const minShowMs = 450;
   const elapsed   = Date.now() - started;
   if (elapsed < minShowMs) await new Promise(r => setTimeout(r, minShowMs - elapsed));
-  _hideSwitchTransition();
+  if (ok) {
+    _hideSwitchTransition();
+  } else {
+    await _showSwitchError();
+  }
+  return ok;
 }
 
 function _renderLocList() {
@@ -304,7 +370,7 @@ function _hideStartupChooser() {
 async function _chooseStartupLocation(i) {
   const list = _getLocations();
   if (!list[i]) return;
-  localStorage.setItem('cp_api_url', list[i].url);
+  _activateLocation(list[i].url);
   _hideDisconnectedScreen(); // also hides the chooser itself + reveals the dashboard
   _renderLocList();
   await _switchWithTransition(list[i].name);
@@ -315,7 +381,7 @@ async function _chooseStartupLocation(i) {
 // immediately pick a different one; otherwise falls back to the neutral
 // ERPGEN-branded default screen, same one shown on a fresh install.
 function disconnectLocation() {
-  localStorage.removeItem('cp_api_url');
+  _deactivateLocation();
   loadStatsBranding(); // resets topbar name/logo/theme to the neutral ERPGEN default
   closeLocationModal();
   _renderLocList();
@@ -360,7 +426,7 @@ function closeLocationModal() {
 async function connectLocation(i) {
   const list = _getLocations();
   if (!list[i]) return;
-  localStorage.setItem('cp_api_url', list[i].url);
+  _activateLocation(list[i].url);
   _renderLocList();
   closeLocationModal();
   _hideDisconnectedScreen();
@@ -370,7 +436,7 @@ async function connectLocation(i) {
 function removeLocation(i) {
   const list = _getLocations();
   const active = localStorage.getItem('cp_api_url') || '';
-  if (list[i] && list[i].url === active) localStorage.removeItem('cp_api_url');
+  if (list[i] && list[i].url === active) _deactivateLocation();
   list.splice(i, 1);
   _saveLocations(list);
   _renderLocList();
@@ -393,7 +459,7 @@ async function addLocation() {
   // was connected before, and the dashboard keeps silently showing that old
   // location's data. Mirrors the direct-tunnel-URL QR-scan branch below, which
   // already auto-connects.
-  localStorage.setItem('cp_api_url', url);
+  _activateLocation(url);
   _renderLocList();
   _hideDisconnectedScreen();
   await _switchWithTransition(name);
@@ -497,7 +563,7 @@ function _handleQRResult(rawValue) {
         list.push({ name: autoName, url: tunnelUrl });
         _saveLocations(list);
       }
-      localStorage.setItem('cp_api_url', tunnelUrl);
+      _activateLocation(tunnelUrl);
       closeLocationModal();
       _hideDisconnectedScreen();
       _renderLocList();
