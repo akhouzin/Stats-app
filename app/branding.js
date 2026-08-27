@@ -122,10 +122,20 @@ function applyStatsBranding(data) {
 
 async function loadStatsBranding() {
   if (!getApiBase()) { applyStatsBranding(_STATS_DEFAULT_BRANDING); return; }
+  // Snapshot which POS connection this call belongs to (state.js:_locationEpoch,
+  // bumped on every restaurant switch by location-picker.js). data-loader.js
+  // fires this off unawaited on every loadData() call — including the 60s
+  // auto-refresh — so without this guard a slow /api/branding response from
+  // the restaurant just switched AWAY from can land after the new one's own
+  // (faster) branding response already applied, silently reverting the
+  // topbar title/logo/theme back to the wrong restaurant's identity.
+  const myEpoch = _locationEpoch;
   try {
     const data = await apiGet('/api/branding');
+    if (myEpoch !== _locationEpoch) return; // stale — a different POS is now active
     applyStatsBranding(data);
   } catch {
+    if (myEpoch !== _locationEpoch) return;
     applyStatsBranding(_STATS_DEFAULT_BRANDING);
   }
 }

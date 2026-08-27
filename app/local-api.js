@@ -34,14 +34,31 @@ function getApiBase() {
   }
 }
 
+// Every request below is bounded to this timeout. Plain fetch() has no
+// default timeout — if a saved location's tunnel accepts the connection but
+// its POS-side stats-server never actually answers (tunnel registered but
+// that POS's Electron app not running, a stale/dead quick-tunnel, etc.), the
+// request used to hang forever with no way out; switching to that location
+// left the switch overlay stuck on "Un instant…" indefinitely instead of
+// ever reaching loadData()'s catch block and showing the error state
+// (location-picker.js:_showSwitchError()). Aborting after this long turns
+// that into a normal, visible failure instead of a silent hang.
+const _API_TIMEOUT_MS = 15000;
+
+function _fetchWithTimeout(url, options) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), _API_TIMEOUT_MS);
+  return fetch(url, { ...options, signal: ctrl.signal }).finally(() => clearTimeout(timer));
+}
+
 async function apiGet(path) {
-  const r = await fetch(getApiBase() + path);
+  const r = await _fetchWithTimeout(getApiBase() + path);
   if (!r.ok) throw new Error(`API ${r.status}: GET ${path}`);
   return r.json();
 }
 
 async function apiPost(path, body) {
-  const r = await fetch(getApiBase() + path, {
+  const r = await _fetchWithTimeout(getApiBase() + path, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
@@ -51,7 +68,7 @@ async function apiPost(path, body) {
 }
 
 async function apiPut(path, body) {
-  const r = await fetch(getApiBase() + path, {
+  const r = await _fetchWithTimeout(getApiBase() + path, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
@@ -61,7 +78,7 @@ async function apiPut(path, body) {
 }
 
 async function apiDelete(path) {
-  const r = await fetch(getApiBase() + path, { method: 'DELETE' });
+  const r = await _fetchWithTimeout(getApiBase() + path, { method: 'DELETE' });
   if (!r.ok) throw new Error(`API ${r.status}: DELETE ${path}`);
   return r.json();
 }
