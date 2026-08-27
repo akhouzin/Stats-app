@@ -26,12 +26,21 @@ function _activateLocation(url) {
   // inherit that oversized window instead of its own default one.
   _historyLoadedFrom = null;
   historyLoaded = false;
+  // If a lazy backward extension (ensureOrdersLoadedThrough) was still in
+  // flight for the restaurant being switched away from, its own _locSyncEnd()
+  // call will no-op once it resolves (its epoch no longer matches) — clear
+  // the dot here instead, so it never gets stuck lit for a switch the new
+  // restaurant may never itself trigger one for.
+  const btn = document.getElementById('loc-settings-btn');
+  if (btn) btn.classList.remove('loc-syncing');
   localStorage.setItem('cp_api_url', url);
 }
 function _deactivateLocation() {
   _locationEpoch++;
   _historyLoadedFrom = null;
   historyLoaded = false;
+  const btn = document.getElementById('loc-settings-btn');
+  if (btn) btn.classList.remove('loc-syncing');
   localStorage.removeItem('cp_api_url');
 }
 

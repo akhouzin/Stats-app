@@ -165,9 +165,16 @@ function _historyWindowStart() {
   return currentMonthStart < minLookback ? currentMonthStart : minLookback;
 }
 
+// +2 days, not +1 — the POS's business day (helpers.js:getDayKey(), shifted
+// by its day-cycle-start hour) can extend up to ~23h past calendar midnight,
+// so a literal "tomorrow" cutoff could clip an order that's still "today"
+// business-day-wise. This margin, combined with _historyWindowStart()'s own
+// lower bound (always at least TODAY_MIN_LOOKBACK_DAYS back), is what used
+// to be handled by a separate narrow fetchTodayOrders() call — merged away
+// once loadData() started fetching the whole eager window in one request.
 function _farFutureCutoff() {
   const d = new Date();
-  d.setDate(d.getDate() + 2); // safely past "today" regardless of timezone
+  d.setDate(d.getDate() + 2);
   return d;
 }
 
@@ -197,6 +204,15 @@ async function ensureOrdersLoadedThrough(targetDate) {
   // NEW restaurant's allOrders.
   const myEpoch = _locationEpoch;
 
+  // Lights the topbar switcher chip's sync dot for as long as this
+  // on-demand backward extension is in flight — see location-picker.js's
+  // _locSyncStart()/_locSyncEnd() (both epoch-guarded, so a straggling call
+  // from a restaurant switched away from can't touch the dot meant for
+  // whichever restaurant is actually active now). This is the only place
+  // left in the app where meaningfully older history loads in the
+  // background after the visible page has already rendered — loadData()'s
+  // own fetch (below) is a single up-front request now, not a phased one.
+  if (typeof _locSyncStart === 'function') _locSyncStart(myEpoch);
   _historyExtendPromise = (async () => {
     const statusEl = document.getElementById('live-status');
     const prevStatus = statusEl ? statusEl.textContent : null;
@@ -212,25 +228,24 @@ async function ensureOrdersLoadedThrough(targetDate) {
     } finally {
       if (statusEl) statusEl.textContent = prevStatus;
       _historyExtendPromise = null;
+      if (typeof _locSyncEnd === 'function') _locSyncEnd(myEpoch);
     }
   })();
   return _historyExtendPromise;
 }
 
-// loadData() has two phases of very different cost: "today" (small, fast —
-// one narrow date-range query) and "history" (bounded to the current month
-// by default — see _historyWindowStart() above — or however far a Recette/
-// Rapport/Revenue section has already lazily extended it). Callers that
-// just need the dashboard to be usable again (e.g. a Stats location switch)
-// can pass onTodayReady to be notified once the fast phase lands, instead
-// of waiting on the history phase too — see
-// Stats/app/location-picker.js:_switchWithTransition(). onTodayReady is
-// called with `true`/`false` (whether the "today" phase actually succeeded)
-// so a caller mid-switch can tell a failed connection apart from a real one
-// instead of silently showing the dashboard either way — the stale-epoch
-// bail-outs below call it with no argument, since those only ever belong to
-// a request that's since been superseded by a newer switch, not to a switch
-// still waiting on a result.
+// Fetches everything the eager default window covers (the current month,
+// give or take page-today.js's lookback floor — see _historyWindowStart())
+// in ONE request, run in parallel with the other startup fetches, so the
+// dashboard never renders against a narrower "today only" preview that gets
+// silently upgraded moments later. Older history (previous months, Revenue's
+// trend) stays lazy — see ensureOrdersLoadedThrough() above. onTodayReady is
+// called with `true`/`false` (whether this fetch actually succeeded) so a
+// caller mid-switch (location-picker.js:_switchWithTransition()) can tell a
+// failed connection apart from a real one instead of silently showing the
+// dashboard either way — the stale-epoch bail-out below calls it with no
+// argument, since that only ever belongs to a request that's since been
+// superseded by a newer switch, not to a switch still waiting on a result.
 async function loadData(onTodayReady) {
   if (!getApiBase()) { if (typeof onTodayReady === 'function') onTodayReady(); return; }
   loadStatsBranding();
@@ -245,63 +260,39 @@ async function loadData(onTodayReady) {
   // previous one's numbers, instead of the one just selected.
   const myEpoch = _locationEpoch;
   try {
-    const [cancelledData, todayRaw] = await Promise.all([
-      apiGet('/api/cancelled'),
-      fetchTodayOrders(),
-      loadLocalData(),
-    ]);
-    if (myEpoch !== _locationEpoch) { if (typeof onTodayReady === 'function') onTodayReady(); return; }
-
-    const cancelledKeys = new Set(cancelledData.map(r => `${r.num}|${r.dateKey}`));
-    _cancelledKeysCache = cancelledKeys;
-    allOrders = mapOrders(todayRaw, cancelledKeys);
-    _ordersStamp++;
-
-    document.getElementById('live-status').textContent = 'En ligne';
-    renderToday();
-    renderSalaire();
-    // NOT renderRecette() — allOrders at this point is only the narrow
-    // "today" window (fetchTodayOrders(), ~3 days), not a full month.
-    // Recette reads allOrders directly to total up EVERY day of the
-    // selected month, so rendering it here used to flash the current
-    // month down to just its last couple of days on every single loadData()
-    // call — the initial load AND every 60s auto-refresh — until the fuller
-    // window below landed and replaced it. renderSalaire()/renderToday()
-    // don't have this problem: the former doesn't read allOrders at all,
-    // the latter only ever looks at one specific day. Recette now only
-    // renders once allOrders actually covers a full month (below, and via
-    // renderPage(currentPage) once the history phase lands).
-    if (typeof onTodayReady === 'function') onTodayReady(true);
-
-    document.getElementById('live-status').textContent = 'Chargement…';
-    // Lights the topbar switcher chip's sync dot for as long as the heavier
-    // history phase below is still running — see location-picker.js's
-    // _locSyncStart()/_locSyncEnd() (both are epoch-guarded, so a straggling
-    // call from a restaurant switched away from can't clear the dot for the
-    // one now actually loading, or vice versa).
-    if (typeof _locSyncStart === 'function') _locSyncStart(myEpoch);
     // Never shrink back to the default window once extended — see
     // _historyLoadedFrom's comment above for why.
     const defaultStart = _historyWindowStart();
     const windowStart = (_historyLoadedFrom && _historyLoadedFrom < defaultStart)
       ? _historyLoadedFrom
       : defaultStart;
-    const allRaw = await fetchOrdersRange(windowStart, _farFutureCutoff());
-    if (myEpoch !== _locationEpoch) { if (typeof _locSyncEnd === 'function') _locSyncEnd(myEpoch); return; } // stale — a different POS is now active
+
+    const [cancelledData, allRaw] = await Promise.all([
+      apiGet('/api/cancelled'),
+      fetchOrdersRange(windowStart, _farFutureCutoff()),
+      loadLocalData(),
+    ]);
+    if (myEpoch !== _locationEpoch) { if (typeof onTodayReady === 'function') onTodayReady(); return; }
+
+    const cancelledKeys = new Set(cancelledData.map(r => `${r.num}|${r.dateKey}`));
+    _cancelledKeysCache = cancelledKeys;
     allOrders = mapOrders(allRaw, cancelledKeys);
     _historyLoadedFrom = windowStart;
     _ordersStamp++;
     clearConsumptionCache();
     historyLoaded = true;
+
     document.getElementById('live-status').textContent = 'En ligne';
-    if (typeof _locSyncEnd === 'function') _locSyncEnd(myEpoch);
+    renderToday();
+    renderSalaire();
+    renderRecette();
+    if (typeof onTodayReady === 'function') onTodayReady(true);
 
     renderPage(currentPage);
 
   } catch (e) {
     console.error(e);
     if (myEpoch === _locationEpoch) document.getElementById('live-status').textContent = 'Erreur connexion';
-    if (typeof _locSyncEnd === 'function') _locSyncEnd(myEpoch);
     if (typeof onTodayReady === 'function') onTodayReady(false);
   }
 }
