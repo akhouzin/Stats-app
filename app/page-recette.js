@@ -5,11 +5,12 @@ let recMonthOffset = 0;
 
 // recMonthOffset has no lower bound — a business can page back indefinitely
 // — so this is the one navigation path in the whole app that can ask for
-// order data older than data-loader.js's default HISTORY_WINDOW_MONTHS.
-// ensureOrdersLoadedThrough() no-ops when the target month is already
-// covered (the common case — most navigation stays recent), and otherwise
-// extends allOrders backward before rendering, so renderRecette() never
-// runs against a month it doesn't actually have data for.
+// order data older than data-loader.js's eager default (the current month —
+// see _historyWindowStart()). ensureOrdersLoadedThrough() no-ops when the
+// target month is already covered (the common case — most navigation stays
+// recent), and otherwise extends allOrders backward before rendering, so
+// renderRecette() never runs against a month it doesn't actually have data
+// for.
 async function changeRecMonth(dir) {
   recMonthOffset += dir;
   const now = new Date();

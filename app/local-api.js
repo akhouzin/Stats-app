@@ -102,8 +102,8 @@ async function fetchTodayOrders() {
 // "fetch literally every order ever" call — that cost only ever grows as a
 // business accumulates history, and was the main reason Stats felt slow to
 // load independent of compression. data-loader.js decides the actual window
-// (a default trailing period, extended backward on demand when Recette's
-// month navigation pages past it) — see its HISTORY_WINDOW_MONTHS.
+// (the current calendar month by default, extended backward on demand when
+// Recette/Rapport/Revenue need older history) — see its _historyWindowStart().
 async function fetchOrdersRange(fromDate, toDate) {
   return apiGet(`/api/orders?from=${encodeURIComponent(fromDate.toISOString())}&to=${encodeURIComponent(toDate.toISOString())}`);
 }

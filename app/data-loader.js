@@ -55,11 +55,33 @@ let historyLoaded = false;
 async function renderPage(idx) {
   switch (idx) {
     case 0: renderToday();      break;
-    case 1: renderRapport();    break;
+    case 1: await _renderRapportWithPrevMonthHistory(); break;
     case 2: renderRecette();    break;
     case 3: renderSalaire();    break;
     case 4: renderInventaire(); break;
     case 5: await _renderRevenueWithTrendHistory(); break;
+  }
+}
+
+// page-daily.js's Rapport shows the current month by default (already
+// covered by the eager window below) plus a "Vs Mois Dernier" comparison
+// against the FULL previous calendar month, which is not. Renders
+// immediately with whatever's loaded (current month is always there; the
+// trend tile reads "Pas de données" until the lazy fetch lands), then
+// extends backward and re-renders once the previous month arrives — same
+// pattern as Revenue below. renderRapport() has no stamp guard of its own,
+// so the second call is a plain (cheap) recompute, not a no-op — that's
+// fine, it only happens once per session per the same ensureOrdersLoadedThrough()
+// no-op-if-already-covered rule.
+async function _renderRapportWithPrevMonthHistory() {
+  renderRapport();
+  const now = new Date();
+  const prevMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  try {
+    await ensureOrdersLoadedThrough(prevMonthStart);
+    renderRapport();
+  } catch (e) {
+    console.error('[rapport] failed to load previous-month history', e);
   }
 }
 
@@ -90,56 +112,57 @@ async function _renderRevenueWithTrendHistory() {
 // ═══════════════════════════════════════
 // HISTORY WINDOW
 // ═══════════════════════════════════════
-// Of every page that reads allOrders: page-recette.js's month navigation
-// (recMonthOffset) has no lower bound — a business can page back
-// indefinitely — and page-revenue.js's trend chart wants REVENUE_TREND_MONTHS
-// (above). Both fetch whatever they need beyond the default window lazily,
-// on demand, via ensureOrdersLoadedThrough() below (changeRecMonth() /
-// _renderRevenueWithTrendHistory() respectively) rather than paying for it
-// on every load. Every other consumer's own range fits comfortably inside a
-// much smaller default: page-today.js (max 7 days back — always covered,
-// since the default window below never ends later than the start of the
-// PREVIOUS calendar month, which is itself always ≥ 7 days before "today"),
-// page-daily.js's Rapport (current month, plus a "Vs Mois Dernier"
-// comparison against the full previous month), page-inventory.js
-// (today/week/current-month periods), page-salary.js (doesn't read
-// allOrders at all). So the eagerly-fetched default window only needs to
-// cover the current + previous calendar month — small and fast regardless
-// of how much history a business has accumulated — instead of the ENTIRE
-// history depth every other consumer might ever need, which is both the
-// main reason Stats used to feel slow to (re)load and the reason a whole
-// month's data could visibly regress to a handful of days on every 60s
-// auto-refresh while that oversized fetch was still in flight (see
-// loadData()'s "today" phase below).
-const DEFAULT_EAGER_MONTHS_BACK = 1; // current month + previous month
+// Eagerly-loaded default window on connect and on every 60s refresh: the
+// CURRENT calendar month only, per explicit user request — "only get the
+// whole data of the current month, the other history can be fetched by
+// time passing." Everything before the current month is lazy, fetched on
+// demand via ensureOrdersLoadedThrough() only by the specific section that
+// actually needs it: page-recette.js's unbounded back-navigation
+// (changeRecMonth), page-daily.js's Rapport "Vs Mois Dernier" comparison
+// (_renderRapportWithPrevMonthHistory, above), and page-revenue.js's
+// REVENUE_TREND_MONTHS trend chart (_renderRevenueWithTrendHistory, above).
+// page-inventory.js (today/week/current-month periods) and page-salary.js
+// (doesn't read allOrders at all) need nothing beyond the current month
+// either. The one exception carved out of "current month only" is
+// page-today.js's day-by-day nav (TODAY_MAX_OFFSET, up to 7 days back) —
+// near the start of a month that can reach a handful of days into the
+// PREVIOUS month, and that page has no lazy-fetch of its own, so the eager
+// window's true start is whichever is further back: the 1st of the current
+// month, or TODAY_MIN_LOOKBACK_DAYS before today. In practice this means
+// "current month only" for most of the month, widening by at most about a
+// week right around the 1st — never the whole previous month.
+const TODAY_MIN_LOOKBACK_DAYS = 8; // 1 day of slack past page-today.js's own 7-day max offset
 
 // Batch size for each on-demand backward extension once a page actually
 // needs order history older than the eager default above (Recette's
-// unbounded back-navigation, Revenue's trend chart) — sized as a chunk, not
-// "fetch exactly what's needed", so repeated navigation doesn't turn into
-// one network round trip per click/tab-open.
+// unbounded back-navigation, Rapport's and Revenue's trend comparisons) —
+// sized as a chunk, not "fetch exactly what's needed", so repeated
+// navigation doesn't turn into one network round trip per click/tab-open.
 const HISTORY_EXTEND_CHUNK_MONTHS = 6;
 
 // Oldest date currently covered by allOrders. Once extended backward (by a
-// Recette navigation or a Revenue tab-open past the default window), this
-// must never move forward again for the life of the session — loadData()'s
-// periodic refresh re-fetches from THIS boundary, not the default window,
-// precisely so a user looking at month -18 doesn't have that data silently
-// vanish out from under them on the next 60s auto-refresh. The cost of that
-// is real (the periodic refresh re-fetches however far back the session has
-// ever gone) but it's proportional to what this specific session actually
-// looked at, not to the store's total lifetime order count.
+// Recette navigation, or a Rapport/Revenue tab-open, past the default
+// window), this must never move forward again for the life of the session —
+// loadData()'s periodic refresh re-fetches from THIS boundary, not the
+// default window, precisely so a user looking at month -18 doesn't have
+// that data silently vanish out from under them on the next 60s
+// auto-refresh. The cost of that is real (the periodic refresh re-fetches
+// however far back the session has ever gone) but it's proportional to what
+// this specific session actually looked at, not to the store's total
+// lifetime order count.
 let _historyLoadedFrom = null;
 
 let _cancelledKeysCache = null;   // reused by ensureOrdersLoadedThrough() — avoids its own /api/cancelled round trip
 let _historyExtendPromise = null; // in-flight guard — overlapping callers await the same fetch instead of racing
 
 function _historyWindowStart() {
-  const d = new Date();
-  d.setMonth(d.getMonth() - DEFAULT_EAGER_MONTHS_BACK);
-  d.setDate(1);
-  d.setHours(0, 0, 0, 0);
-  return d;
+  const now = new Date();
+  const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const minLookback = new Date(now);
+  minLookback.setDate(minLookback.getDate() - TODAY_MIN_LOOKBACK_DAYS);
+  minLookback.setHours(0, 0, 0, 0);
+  // Whichever is further back — see the comment above for why both matter.
+  return currentMonthStart < minLookback ? currentMonthStart : minLookback;
 }
 
 function _farFutureCutoff() {
@@ -195,12 +218,12 @@ async function ensureOrdersLoadedThrough(targetDate) {
 }
 
 // loadData() has two phases of very different cost: "today" (small, fast —
-// one narrow date-range query) and "history" (bounded to DEFAULT_EAGER_MONTHS_BACK
-// by default, or however far a Recette/Revenue navigation has already
-// extended it — see above). Callers that just need the dashboard to be
-// usable again (e.g. a Stats location switch) can pass onTodayReady to be
-// notified once the fast phase lands, instead of waiting on the history
-// phase too — see
+// one narrow date-range query) and "history" (bounded to the current month
+// by default — see _historyWindowStart() above — or however far a Recette/
+// Rapport/Revenue section has already lazily extended it). Callers that
+// just need the dashboard to be usable again (e.g. a Stats location switch)
+// can pass onTodayReady to be notified once the fast phase lands, instead
+// of waiting on the history phase too — see
 // Stats/app/location-picker.js:_switchWithTransition(). onTodayReady is
 // called with `true`/`false` (whether the "today" phase actually succeeded)
 // so a caller mid-switch can tell a failed connection apart from a real one
