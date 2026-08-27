@@ -78,7 +78,13 @@ async function _renderRapportWithPrevMonthHistory() {
   const now = new Date();
   const prevMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
   try {
-    await ensureOrdersLoadedThrough(prevMonthStart);
+    // padMonths: 0 — Rapport only ever wants exactly the one previous month,
+    // not an amortized multi-month batch (that padding is for Recette's
+    // open-ended back-navigation, below). Padding here would silently
+    // multiply this fetch several times over for no benefit, which is
+    // exactly what was making the older, data-heavy POS feel stuck when
+    // just opening this tab.
+    await ensureOrdersLoadedThrough(prevMonthStart, 0);
     renderRapport();
   } catch (e) {
     console.error('[rapport] failed to load previous-month history', e);
@@ -102,7 +108,11 @@ async function _renderRevenueWithTrendHistory() {
   trendStart.setDate(1);
   trendStart.setHours(0, 0, 0, 0);
   try {
-    await ensureOrdersLoadedThrough(trendStart);
+    // padMonths: 0 — REVENUE_TREND_MONTHS already IS the exact window this
+    // chart needs; the default amortized padding (meant for Recette's
+    // open-ended back-navigation) would fetch several months more than the
+    // chart will ever use, for no benefit.
+    await ensureOrdersLoadedThrough(trendStart, 0);
     renderRevenue();
   } catch (e) {
     console.error('[revenue] failed to load trend history', e);
@@ -185,16 +195,27 @@ function _farFutureCutoff() {
 // the server already returns each range newest-first, and everything in
 // this chunk is by construction older than everything already loaded, so
 // the array's existing newest-first order is preserved.
-async function ensureOrdersLoadedThrough(targetDate) {
+//
+// padMonths controls how much EXTRA history to fetch beyond targetDate
+// itself, on top of the exact gap: default HISTORY_EXTEND_CHUNK_MONTHS,
+// for callers with an open-ended, incremental need (page-recette.js's
+// changeRecMonth() — a business can keep clicking "previous month"
+// indefinitely, so batching ahead avoids one network round trip per
+// click). Callers whose target is already an exact, fixed, one-shot need —
+// _renderRapportWithPrevMonthHistory() (exactly one previous month),
+// _renderRevenueWithTrendHistory() (exactly REVENUE_TREND_MONTHS) — pass 0,
+// so this fetches precisely what they asked for and nothing more. Padding
+// those by another 6 months each (the old, single-chunk-size behavior) was
+// multiplying an otherwise small tab-open fetch by 6-7x for no benefit,
+// which is what made just opening Rapport/Revenue feel slow/stuck on a POS
+// with a meaningful amount of order history.
+async function ensureOrdersLoadedThrough(targetDate, padMonths = HISTORY_EXTEND_CHUNK_MONTHS) {
   if (_historyLoadedFrom && targetDate >= _historyLoadedFrom) return;
   if (_historyExtendPromise) return _historyExtendPromise;
 
   const gapEnd = _historyLoadedFrom || _farFutureCutoff();
-  // Fetch a full extra chunk at once (not just the exact gap) so paging
-  // back one month at a time doesn't turn into one network round trip per
-  // click — see HISTORY_EXTEND_CHUNK_MONTHS above.
   const gapStart = new Date(targetDate);
-  gapStart.setMonth(gapStart.getMonth() - HISTORY_EXTEND_CHUNK_MONTHS);
+  gapStart.setMonth(gapStart.getMonth() - padMonths);
 
   // Snapshot which POS connection this fetch belongs to — if the user
   // switches restaurants (location-picker.js:_activateLocation()/
@@ -236,16 +257,30 @@ async function ensureOrdersLoadedThrough(targetDate) {
 
 // Fetches everything the eager default window covers (the current month,
 // give or take page-today.js's lookback floor — see _historyWindowStart())
-// in ONE request, run in parallel with the other startup fetches, so the
-// dashboard never renders against a narrower "today only" preview that gets
-// silently upgraded moments later. Older history (previous months, Revenue's
-// trend) stays lazy — see ensureOrdersLoadedThrough() above. onTodayReady is
-// called with `true`/`false` (whether this fetch actually succeeded) so a
-// caller mid-switch (location-picker.js:_switchWithTransition()) can tell a
-// failed connection apart from a real one instead of silently showing the
+// before the dashboard renders, so it never shows a narrower "today only"
+// preview that gets silently upgraded moments later. Older history
+// (previous months, Revenue's trend) stays lazy — see
+// ensureOrdersLoadedThrough() above. onTodayReady is called with
+// `true`/`false` (whether this load actually succeeded) so a caller
+// mid-switch (location-picker.js:_switchWithTransition()) can tell a failed
+// connection apart from a real one instead of silently showing the
 // dashboard either way — the stale-epoch bail-out below calls it with no
 // argument, since that only ever belongs to a request that's since been
 // superseded by a newer switch, not to a switch still waiting on a result.
+//
+// Split into two sequential waves rather than one single Promise.all of
+// everything: loadLocalData() alone fans out to 10 concurrent requests, and
+// most browsers cap concurrent requests per origin around 6 (HTTP/1.1) —
+// throwing the orders fetch (by far the largest single payload here, and
+// the one most likely to be slow on a POS with substantial order history)
+// into that same 11-wide burst let it get queued behind/interleaved with
+// 10 much smaller requests, and vice versa, so even the small ones could
+// end up waiting on a connection slot. Fetching the small stuff first, then
+// the orders range on its own, keeps each wave's peak concurrency lower and
+// gives the potentially-large request the connection pool to itself —
+// without changing the "nothing renders until the current month is fully
+// loaded" guarantee, since both waves are still awaited before anything
+// below runs.
 async function loadData(onTodayReady) {
   if (!getApiBase()) { if (typeof onTodayReady === 'function') onTodayReady(); return; }
   loadStatsBranding();
@@ -267,11 +302,12 @@ async function loadData(onTodayReady) {
       ? _historyLoadedFrom
       : defaultStart;
 
-    const [cancelledData, allRaw] = await Promise.all([
+    const [cancelledData] = await Promise.all([
       apiGet('/api/cancelled'),
-      fetchOrdersRange(windowStart, _farFutureCutoff()),
       loadLocalData(),
     ]);
+    if (myEpoch !== _locationEpoch) { if (typeof onTodayReady === 'function') onTodayReady(); return; }
+    const allRaw = await fetchOrdersRange(windowStart, _farFutureCutoff());
     if (myEpoch !== _locationEpoch) { if (typeof onTodayReady === 'function') onTodayReady(); return; }
 
     const cancelledKeys = new Set(cancelledData.map(r => `${r.num}|${r.dateKey}`));
