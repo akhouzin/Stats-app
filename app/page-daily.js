@@ -3,14 +3,24 @@
 // ═══════════════════════════════════════
 let _rapportViewMode = 'simple';
 
+// 'recette' is a 4th mode (button placed before "Résumé") that swaps the
+// whole Rapport body for the former standalone Recette page's content
+// (#r-view-recette — month nav, charges sheet) instead of another KPI grid,
+// so it's handled as a view swap rather than another r-kpi-* toggle.
 function setRapportViewMode(mode) {
   _rapportViewMode = mode;
+  document.getElementById('r-view-btn-recette').classList.toggle('active', mode === 'recette');
   document.getElementById('r-view-btn-simple').classList.toggle('active', mode === 'simple');
   document.getElementById('r-view-btn-trends').classList.toggle('active', mode === 'trends');
   document.getElementById('r-view-btn-sales').classList.toggle('active', mode === 'sales');
+
+  document.getElementById('r-view-stats').style.display = mode === 'recette' ? 'none' : 'block';
+  document.getElementById('r-view-recette').style.display = mode === 'recette' ? 'block' : 'none';
   document.getElementById('r-kpi-simple').style.display = mode === 'simple' ? 'grid' : 'none';
   document.getElementById('r-kpi-trends').style.display = mode === 'trends' ? 'grid' : 'none';
   document.getElementById('r-kpi-sales').style.display = mode === 'sales' ? 'grid' : 'none';
+
+  if (mode === 'recette') renderRecette();
 }
 
 function renderRapport() {

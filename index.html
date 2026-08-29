@@ -92,73 +92,84 @@
   <div id="rapport-content" style="display:none;">
     <div class="day-label" id="r-month-label" style="text-align:center;margin:12px 0 4px;">—</div>
     <div class="inv-period-bar" style="margin-bottom:12px;">
+      <button class="inv-period-btn" id="r-view-btn-recette" onclick="setRapportViewMode('recette')">Recettes</button>
       <button class="inv-period-btn" id="r-view-btn-simple" onclick="setRapportViewMode('simple')">Résumé</button>
       <button class="inv-period-btn" id="r-view-btn-trends" onclick="setRapportViewMode('trends')">Tendances</button>
       <button class="inv-period-btn" id="r-view-btn-sales" onclick="setRapportViewMode('sales')">Ventes</button>
     </div>
-    <div class="kpi-grid" id="r-kpi-simple">
-      <div class="kpi"><div class="kpi-label">Commandes</div><div class="kpi-value" id="r-orders">—</div></div>
-      <div class="kpi"><div class="kpi-label">Total</div><div class="kpi-value green" id="r-total">—</div><div class="kpi-sub">Dhs</div></div>
-      <div class="kpi"><div class="kpi-label">Panier Moyen</div><div class="kpi-value" id="r-avg">—</div><div class="kpi-sub">Dhs / commande</div></div>
-      <div class="kpi"><div class="kpi-label">Articles vendus</div><div class="kpi-value" id="r-units">—</div><div class="kpi-sub">unités</div></div>
+
+    <!-- RAPPORT: STATS VIEW (Résumé / Tendances / Ventes) -->
+    <div id="r-view-stats">
+      <div class="kpi-grid" id="r-kpi-simple">
+        <div class="kpi"><div class="kpi-label">Commandes</div><div class="kpi-value" id="r-orders">—</div></div>
+        <div class="kpi"><div class="kpi-label">Total</div><div class="kpi-value green" id="r-total">—</div><div class="kpi-sub">Dhs</div></div>
+        <div class="kpi"><div class="kpi-label">Panier Moyen</div><div class="kpi-value" id="r-avg">—</div><div class="kpi-sub">Dhs / commande</div></div>
+        <div class="kpi"><div class="kpi-label">Articles vendus</div><div class="kpi-value" id="r-units">—</div><div class="kpi-sub">unités</div></div>
+      </div>
+      <div class="kpi-grid" id="r-kpi-trends" style="display:none;">
+        <div class="kpi"><div class="kpi-label">Encaissé / Jour Actif</div><div class="kpi-value" id="r-day-avg">—</div><div class="kpi-sub" id="r-active-days">—</div></div>
+        <div class="kpi"><div class="kpi-label">Articles / Commande</div><div class="kpi-value" id="r-items-per-order">—</div><div class="kpi-sub">articles par commande</div></div>
+        <div class="kpi"><div class="kpi-label">Meilleur Jour</div><div class="kpi-value" id="r-best-day">—</div><div class="kpi-sub" id="r-best-day-amount">—</div></div>
+        <div class="kpi"><div class="kpi-label">Vs Mois Dernier</div><div class="kpi-value" id="r-trend-ca">—</div><div class="kpi-sub" id="r-trend-cmd">—</div></div>
+      </div>
+      <div class="kpi-grid" id="r-kpi-sales" style="display:none;">
+        <div class="kpi"><div class="kpi-label">Article Vedette</div><div class="kpi-value" id="r-top-article">—</div><div class="kpi-sub" id="r-top-article-amount">—</div></div>
+        <div class="kpi"><div class="kpi-label">Catégorie Vedette</div><div class="kpi-value" id="r-top-category">—</div><div class="kpi-sub" id="r-top-category-amount">—</div></div>
+        <div class="kpi"><div class="kpi-label">Prix Moyen / Article</div><div class="kpi-value" id="r-avg-item-price">—</div><div class="kpi-sub">Dhs par article vendu</div></div>
+        <div class="kpi"><div class="kpi-label">Multi-Articles</div><div class="kpi-value" id="r-multi-item-pct">—</div><div class="kpi-sub">commandes à plusieurs articles</div></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Articles vendus — ce mois</div>
+        <div id="r-items" class="scroll-list"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Consommation — ce mois</div>
+        <div id="r-consumption"></div>
+      </div>
     </div>
-    <div class="kpi-grid" id="r-kpi-trends" style="display:none;">
-      <div class="kpi"><div class="kpi-label">Encaissé / Jour Actif</div><div class="kpi-value" id="r-day-avg">—</div><div class="kpi-sub" id="r-active-days">—</div></div>
-      <div class="kpi"><div class="kpi-label">Articles / Commande</div><div class="kpi-value" id="r-items-per-order">—</div><div class="kpi-sub">articles par commande</div></div>
-      <div class="kpi"><div class="kpi-label">Meilleur Jour</div><div class="kpi-value" id="r-best-day">—</div><div class="kpi-sub" id="r-best-day-amount">—</div></div>
-      <div class="kpi"><div class="kpi-label">Vs Mois Dernier</div><div class="kpi-value" id="r-trend-ca">—</div><div class="kpi-sub" id="r-trend-cmd">—</div></div>
-    </div>
-    <div class="kpi-grid" id="r-kpi-sales" style="display:none;">
-      <div class="kpi"><div class="kpi-label">Article Vedette</div><div class="kpi-value" id="r-top-article">—</div><div class="kpi-sub" id="r-top-article-amount">—</div></div>
-      <div class="kpi"><div class="kpi-label">Catégorie Vedette</div><div class="kpi-value" id="r-top-category">—</div><div class="kpi-sub" id="r-top-category-amount">—</div></div>
-      <div class="kpi"><div class="kpi-label">Prix Moyen / Article</div><div class="kpi-value" id="r-avg-item-price">—</div><div class="kpi-sub">Dhs par article vendu</div></div>
-      <div class="kpi"><div class="kpi-label">Multi-Articles</div><div class="kpi-value" id="r-multi-item-pct">—</div><div class="kpi-sub">commandes à plusieurs articles</div></div>
-    </div>
-    <div class="card">
-      <div class="card-title">Articles vendus — ce mois</div>
-      <div id="r-items" class="scroll-list"></div>
-    </div>
-    <div class="card">
-      <div class="card-title">Consommation — ce mois</div>
-      <div id="r-consumption"></div>
+
+    <!-- RAPPORT: RECETTES VIEW (moved from the former standalone Recette page) -->
+    <div id="r-view-recette" style="display:none;">
+
+      <!-- Récapitulatif du mois — embedded above the table, sticky so it
+           stays visible while the (potentially long) charges sheet scrolls
+           beneath it, instead of a separate fixed bar floating over the
+           bottom nav (see system/edit-history.md, 2026-08-29). -->
+      <div id="rec-summary-card" class="card rec-summary-embedded"></div>
+
+      <!-- Month nav -->
+      <div class="day-nav" style="margin-bottom:12px;">
+        <button class="day-nav-btn" id="rec-prev" onclick="changeRecMonth(-1)">‹</button>
+        <div><div class="day-label" id="rec-month-label">—</div></div>
+        <button class="day-nav-btn" id="rec-next" onclick="changeRecMonth(1)">›</button>
+      </div>
+
+      <!-- Add charge bar -->
+      <div class="sal-top-bar">
+        <span style="font-family:'Cinzel',serif;font-size:10px;letter-spacing:2px;color:var(--text-dim);text-transform:uppercase;">Charges</span>
+        <button class="sal-add-btn" onclick="toggleRecForm()">+ Ajouter</button>
+      </div>
+
+      <!-- Add charge form -->
+      <div class="sal-add-form" id="rec-add-form" style="display:none;">
+        <div style="font-family:'Cinzel',serif;font-size:10px;letter-spacing:1px;color:var(--green-dark);margin-bottom:6px;">NOUVELLE CHARGE</div>
+        <div class="sal-form-row">
+          <input class="sal-text-input" id="rec-new-name" type="text" placeholder="Nom de la charge">
+          <button class="refresh-btn" onclick="addCharge()" style="white-space:nowrap;">Ajouter</button>
+          <button class="sal-del-btn" onclick="toggleRecForm()" style="color:var(--text-dim);">Annuler</button>
+        </div>
+      </div>
+
+      <!-- Recette & Charges table -->
+      <div class="card" id="rec-sheet-card">
+        <div class="card-title" id="rec-sheet-title">Recette & Charges</div>
+        <div class="sal-sheet-wrap">
+          <table class="sal-sheet-table" id="rec-sheet"></table>
+        </div>
+      </div>
+
     </div>
   </div>
-</div>
-
-<!-- RECETTE PAGE -->
-<div class="page" id="page-recette">
-
-  <!-- Month nav -->
-  <div class="day-nav" style="margin-bottom:12px;">
-    <button class="day-nav-btn" id="rec-prev" onclick="changeRecMonth(-1)">‹</button>
-    <div><div class="day-label" id="rec-month-label">—</div></div>
-    <button class="day-nav-btn" id="rec-next" onclick="changeRecMonth(1)">›</button>
-  </div>
-
-  <!-- Add charge bar -->
-  <div class="sal-top-bar">
-    <span style="font-family:'Cinzel',serif;font-size:10px;letter-spacing:2px;color:var(--text-dim);text-transform:uppercase;">Charges</span>
-    <button class="sal-add-btn" onclick="toggleRecForm()">+ Ajouter</button>
-  </div>
-
-  <!-- Add charge form -->
-  <div class="sal-add-form" id="rec-add-form" style="display:none;">
-    <div style="font-family:'Cinzel',serif;font-size:10px;letter-spacing:1px;color:var(--green-dark);margin-bottom:6px;">NOUVELLE CHARGE</div>
-    <div class="sal-form-row">
-      <input class="sal-text-input" id="rec-new-name" type="text" placeholder="Nom de la charge">
-      <button class="refresh-btn" onclick="addCharge()" style="white-space:nowrap;">Ajouter</button>
-      <button class="sal-del-btn" onclick="toggleRecForm()" style="color:var(--text-dim);">Annuler</button>
-    </div>
-  </div>
-
-  <!-- Recette & Charges table -->
-  <div class="card" id="rec-sheet-card">
-    <div class="card-title" id="rec-sheet-title">Recette & Charges</div>
-    <div class="sal-sheet-wrap">
-      <table class="sal-sheet-table" id="rec-sheet"></table>
-    </div>
-  </div>
-
 </div>
 
 <!-- SALAIRE PAGE (read-only) -->
@@ -231,11 +242,6 @@
 </div><!-- end pages-slider -->
 </div><!-- end pages-wrap -->
 
-<!-- RECETTE SUMMARY BAR -->
-<div class="rec-summary-bar" id="rec-summary-bar" style="display:none;">
-  <div id="rec-summary-card"></div>
-</div>
-
 <!-- RECETTE EDIT MODAL -->
 <div id="rec-edit-modal" style="display:none;position:fixed;inset:0;z-index:500;align-items:center;justify-content:center;">
   <div class="sal-modal-backdrop" onclick="closeRecModal()"></div>
@@ -273,15 +279,12 @@
     <span class="bnav-icon"><svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"/><path d="M14 2v5a1 1 0 0 0 1 1h5"/><path d="M8 18v-1"/><path d="M12 18v-6"/><path d="M16 18v-3"/></svg></span><span>Rapport</span>
   </button>
   <button class="bnav-tab" onclick="showPage(2)" id="bnav-2">
-    <span class="bnav-icon"><svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 17V7"/><path d="M16 8h-6a2 2 0 0 0 0 4h4a2 2 0 0 1 0 4H8"/><path d="M4 3a1 1 0 0 1 1-1 1.3 1.3 0 0 1 .7.2l.933.6a1.3 1.3 0 0 0 1.4 0l.934-.6a1.3 1.3 0 0 1 1.4 0l.933.6a1.3 1.3 0 0 0 1.4 0l.933-.6a1.3 1.3 0 0 1 1.4 0l.934.6a1.3 1.3 0 0 0 1.4 0l.933-.6A1.3 1.3 0 0 1 19 2a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1 1.3 1.3 0 0 1-.7-.2l-.933-.6a1.3 1.3 0 0 0-1.4 0l-.934.6a1.3 1.3 0 0 1-1.4 0l-.933-.6a1.3 1.3 0 0 0-1.4 0l-.933.6a1.3 1.3 0 0 1-1.4 0l-.934-.6a1.3 1.3 0 0 0-1.4 0l-.933.6a1.3 1.3 0 0 1-.7.2 1 1 0 0 1-1-1z"/></svg></span><span>Recette</span>
-  </button>
-  <button class="bnav-tab" onclick="showPage(3)" id="bnav-3">
     <span class="bnav-icon"><svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1"/><path d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4"/></svg></span><span>Salaire</span>
   </button>
-  <button class="bnav-tab" onclick="showPage(4)" id="bnav-4">
+  <button class="bnav-tab" onclick="showPage(3)" id="bnav-3">
     <span class="bnav-icon"><svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v6"/><path d="M16.76 3a2 2 0 0 1 1.8 1.1l2.23 4.479a2 2 0 0 1 .21.891V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V9.472a2 2 0 0 1 .211-.894L5.45 4.1A2 2 0 0 1 7.24 3z"/><path d="M3.054 9.013h17.893"/></svg></span><span>Inventaire</span>
   </button>
-  <button class="bnav-tab" onclick="showPage(5)" id="bnav-5">
+  <button class="bnav-tab" onclick="showPage(4)" id="bnav-4">
     <span class="bnav-icon"><svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 7h6v6"/><path d="m22 7-8.5 8.5-5-5L2 17"/></svg></span><span>Revenus</span>
   </button>
 </nav>
