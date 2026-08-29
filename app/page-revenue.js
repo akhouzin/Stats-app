@@ -44,10 +44,11 @@ function renderInsights() {
   const deadDays = [...dayEntries].sort((a, b) => a.avgDay - b.avgDay).slice(0, 3);
 
   // ── Menu items ──
+  const menuByName = _menuByName();
   const itemMap = {};
   orders.forEach(o => {
     o.items.forEach(item => {
-      const mi = menuItems.find(m => m.name === item.name);
+      const mi = menuByName.get(item.name);
       if (!mi) return;
       if (!itemMap[item.name]) itemMap[item.name] = { qty: 0, revenue: 0 };
       itemMap[item.name].qty += item.qty;

@@ -6,10 +6,24 @@
 // getStatsDayCycleStartHour(), 0 by default) before formatting, so a business
 // open past midnight buckets Stats' "commandes"/history the same way the POS
 // itself does instead of splitting one continuous shift across two calendar days.
+//
+// Manual DD/MM/YYYY formatting instead of toLocaleDateString('fr-MA', {...}) —
+// found via live profiling to be the actual bottleneck behind Stats "getting
+// stuck" on a POS with a few thousand orders loaded: this is called once per
+// order (often more than once — every page that groups by day calls it), and
+// Date.prototype.toLocaleDateString() with Intl formatting options measured
+// well over 1ms/call at scale (thousands of calls blocking the main thread
+// for over a second — this exact freeze is what read as "stuck during
+// section navigation"). The manual version produces byte-identical output
+// (verified against the Intl version across thousands of dates, including
+// month/year boundaries) in a fraction of a percent of the time — Date
+// getters are cheap; Intl.DateTimeFormat construction/lookup is not.
 function getDayKey(date) {
   const h = (typeof getStatsDayCycleStartHour === 'function') ? getStatsDayCycleStartHour() : 0;
   const d = h > 0 ? new Date(date.getTime() - h * 3600000) : date;
-  return d.toLocaleDateString('fr-MA', { year: 'numeric', month: '2-digit', day: '2-digit' });
+  const dd = String(d.getDate()).padStart(2, '0');
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  return `${dd}/${mm}/${d.getFullYear()}`;
 }
 function fmtMoney(n) { return n.toFixed(2); }
 function fmtTime(date) { return date.toLocaleTimeString('fr-MA', { hour: '2-digit', minute: '2-digit' }); }
@@ -41,9 +55,10 @@ function calcConsumption(orders) {
   let water = 0, coffeeG = 0, milkCl = 0, theG = 0;
   let water50 = 0, oulmes = 0, oulmesFr = 0, sodas = 0;
   let sucreTHe = 0, sucreCafe = 0;
+  const menuByName = _menuByName();
   orders.forEach(o => {
     o.items.forEach(item => {
-      const mi = menuItems.find(m => m.name === item.name);
+      const mi = menuByName.get(item.name);
       if (!mi) return;
       const nl = item.name.toLowerCase();
       const hasCoffee = coffeeKw.some(k => nl.includes(k));

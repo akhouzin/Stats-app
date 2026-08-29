@@ -108,9 +108,10 @@ function renderRapport() {
   document.getElementById('r-top-article').textContent = topArticleName || '—';
   document.getElementById('r-top-article-amount').textContent = topArticleData ? `${fmtMoney(topArticleData.rev)} Dhs` : '—';
 
+  const menuByNameForCat = _menuByName();
   const catMap = {};
   orders.forEach(o => o.items.forEach(item => {
-    const mi = menuItems.find(m => m.name === item.name);
+    const mi = menuByNameForCat.get(item.name);
     const cat = mi ? mi.cat : 'Autre';
     catMap[cat] = (catMap[cat] || 0) + item.price * item.qty;
   }));

@@ -66,9 +66,10 @@ function renderToday() {
   renderBaristaReport(orders, dayLabelLower);
 
   // Articles sold (aggregated qty/revenue per article name)
+  const menuByName = _menuByName();
   const articleMap = {};
   orders.forEach(o => o.items.forEach(i => {
-    const mi = menuItems.find(m => m.name === i.name);
+    const mi = menuByName.get(i.name);
     if (!articleMap[i.name]) articleMap[i.name] = { qty: 0, revenue: 0 };
     articleMap[i.name].qty += i.qty;
     if (mi) articleMap[i.name].revenue += i.qty * mi.price;
