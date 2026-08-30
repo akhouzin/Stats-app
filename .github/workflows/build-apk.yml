@@ -32,14 +32,14 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      - name: Build release APK
+      - name: Build debug APK (auto-signed, installable)
         run: |
           chmod +x ./gradlew
-          ./gradlew assembleRelease
+          ./gradlew assembleDebug
         working-directory: android
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: erpgen-stats-apk
-          path: android/app/build/outputs/apk/release/app-release-unsigned.apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
