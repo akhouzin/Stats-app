@@ -3,16 +3,20 @@
 // ═══════════════════════════════════════
 // Replaces the old Inventaire (stock-balance) tab on the bottom nav. Shows,
 // for one selected day, every article purchased that day (qty_pu/pkg/pl) and
-// its cost at the article's current catalog price (pu/pkg/pl) — the stats-
-// server's read-only /api/marc/achats mirror does not expose per-day price
-// overrides (see legacy/app/marchandise.js:_marcEffectivePrice()), so a day
-// that used an override may show a slightly different total here than the
-// POS's own printed "Marchandise du jour" ticket. page-inventory.js stays
-// loaded (CONSUMABLES/MANUAL_KEYWORDS/fmtNum are still used by
+// its cost — same per-line price-override rule as the POS
+// (legacy/app/marchandise.js:_marcEffectivePrice()): a purchase's own
+// price_pu/pkg/pl (marc_achats, 2026-09-01) wins when set, else the article's
+// current catalog price (pu/pkg/pl). page-inventory.js stays loaded
+// (CONSUMABLES/MANUAL_KEYWORDS/fmtNum are still used by
 // page-barista.js/page-recette.js) — this file only replaces its PAGE, not
 // its data. Reuses page-inventory.js's toISODate()/_minvFmt() (loads earlier).
 
 let _pmcDayOffset = 0;
+
+function _pmcEffectivePrice(art, achat, type) {
+  const override = achat[`price_${type}`];
+  return (override !== null && override !== undefined) ? override : (art[type] || 0);
+}
 
 function _pmcDateForOffset(offset) {
   const d = new Date();
@@ -55,10 +59,15 @@ function renderMarchandise() {
 
   const byArticle = {};
   dayAchats.forEach(a => {
-    const cur = byArticle[a.article_id] || { qty_pu: 0, qty_pkg: 0, qty_pl: 0 };
+    const art = artMap[a.article_id];
+    if (!art) return; // article since deleted in the POS
+    const cur = byArticle[a.article_id] || { qty_pu: 0, qty_pkg: 0, qty_pl: 0, cost: 0 };
     cur.qty_pu  += a.qty_pu  || 0;
     cur.qty_pkg += a.qty_pkg || 0;
     cur.qty_pl  += a.qty_pl  || 0;
+    cur.cost += (a.qty_pu  || 0) * _pmcEffectivePrice(art, a, 'pu')
+              + (a.qty_pkg || 0) * _pmcEffectivePrice(art, a, 'pkg')
+              + (a.qty_pl  || 0) * _pmcEffectivePrice(art, a, 'pl');
     byArticle[a.article_id] = cur;
   });
 
@@ -67,11 +76,9 @@ function renderMarchandise() {
   const nocat = [];
   Object.keys(byArticle).forEach(id => {
     const art = artMap[id];
-    if (!art) return; // article since deleted in the POS
     const q = byArticle[id];
-    const cost = (q.qty_pu || 0) * (art.pu || 0) + (q.qty_pkg || 0) * (art.pkg || 0) + (q.qty_pl || 0) * (art.pl || 0);
-    dayTotal += cost;
-    const row = { art, q, cost };
+    dayTotal += q.cost;
+    const row = { art, q, cost: q.cost };
     if (art.cat_id && catMap[art.cat_id]) (groups[art.cat_id] = groups[art.cat_id] || []).push(row);
     else nocat.push(row);
   });
