@@ -57,7 +57,7 @@ async function renderPage(idx) {
     case 0: renderToday();      break;
     case 1: await _renderRapportWithPrevMonthHistory(); break;
     case 2: renderSalaire();    break;
-    case 3: renderInventaire(); break;
+    case 3: renderMarchandise(); break;
     case 4: await _renderRevenueWithTrendHistory(); break;
   }
 }

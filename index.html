@@ -203,16 +203,19 @@
 
 </div>
 
-<!-- INVENTAIRE PAGE -->
-<div class="page" id="page-inventaire">
-  <div class="inv-period-bar">
-    <button class="inv-period-btn active" onclick="setInvPeriod('today',this)">Jour</button>
-    <button class="inv-period-btn" onclick="setInvPeriod('week',this)">Semaine</button>
-    <button class="inv-period-btn" onclick="setInvPeriod('month',this)">Mois</button>
+<!-- MARCHANDISE PAGE -->
+<div class="page" id="page-marchandise">
+  <div class="day-nav">
+    <button class="day-nav-btn" id="marc-day-prev" onclick="changeMarchDay(-1)">‹</button>
+    <div class="minv-period-range" id="marc-day-label" style="margin:0;">—</div>
+    <button class="day-nav-btn" id="marc-day-next" onclick="changeMarchDay(1)">›</button>
   </div>
-  <div class="minv-period-range" id="inv-period-label">—</div>
-  <div class="card" id="minv-card">
-    <div id="minv-table-wrap"></div>
+  <div class="card" id="marc-card">
+    <div class="marc-total-row">
+      <span class="marc-total-label">Total du jour</span>
+      <span class="marc-total-val" id="marc-day-total">—</span>
+    </div>
+    <div id="marc-table-wrap"></div>
   </div>
 </div>
 
@@ -282,7 +285,7 @@
     <span class="bnav-icon"><svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1"/><path d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4"/></svg></span><span>Salaire</span>
   </button>
   <button class="bnav-tab" onclick="showPage(3)" id="bnav-3">
-    <span class="bnav-icon"><svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v6"/><path d="M16.76 3a2 2 0 0 1 1.8 1.1l2.23 4.479a2 2 0 0 1 .21.891V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V9.472a2 2 0 0 1 .211-.894L5.45 4.1A2 2 0 0 1 7.24 3z"/><path d="M3.054 9.013h17.893"/></svg></span><span>Inventaire</span>
+    <span class="bnav-icon"><svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="21" r="1"/><circle cx="19" cy="21" r="1"/><path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12"/></svg></span><span>Marchandise</span>
   </button>
   <button class="bnav-tab" onclick="showPage(4)" id="bnav-4">
     <span class="bnav-icon"><svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 7h6v6"/><path d="m22 7-8.5 8.5-5-5L2 17"/></svg></span><span>Revenus</span>
@@ -303,6 +306,7 @@
 <script src="./app/page-daily.js"></script>
 <script src="./app/page-revenue.js"></script>
 <script src="./app/page-inventory.js"></script>
+<script src="./app/page-marchandise.js"></script>
 <script src="./app/page-salary.js"></script>
 <script src="./app/page-recette.js"></script>
 <script src="./app/app-init.js"></script>
