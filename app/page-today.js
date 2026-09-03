@@ -65,21 +65,26 @@ function renderToday() {
 
   renderBaristaReport(orders, dayLabelLower);
 
-  // Articles sold (aggregated qty/revenue per article name)
-  const menuByName = _menuByName();
+  // Articles sold (aggregated qty/revenue per article name) — revenue uses
+  // each cart line's OWN recorded price (i.price), not a live menu-catalog
+  // lookup: an item renamed/deleted/repriced since the order was placed
+  // would otherwise silently undercount (or drop entirely) here while
+  // `total` above (built from each order's own already-correct total)
+  // stayed right, making this list's TOTAL drift from "Chiffre d'affaires".
+  // Passing `total` itself as the TOTAL line (rather than re-summing this
+  // map) guarantees the two can never disagree, matching how
+  // page-daily.js's monthly Articles vendus receipt already does it.
   const articleMap = {};
   orders.forEach(o => o.items.forEach(i => {
-    const mi = menuByName.get(i.name);
     if (!articleMap[i.name]) articleMap[i.name] = { qty: 0, revenue: 0 };
     articleMap[i.name].qty += i.qty;
-    if (mi) articleMap[i.name].revenue += i.qty * mi.price;
+    articleMap[i.name].revenue += i.qty * i.price;
   }));
   const articleEntries = Object.entries(articleMap).sort((a, b) => b[1].qty - a[1].qty);
-  const articlesTotal = articleEntries.reduce((s, [, d]) => s + d.revenue, 0);
   renderReceiptIframe(
     't-articles-frame', 'ARTICLES VENDUS', dayLabel,
     articleEntries.map(([name, d]) => ({ name, qty: d.qty, amount: fmtMoney(d.revenue) })),
-    'TOTAL', fmtMoney(articlesTotal)
+    'TOTAL', fmtMoney(total)
   );
 
   setTodayViewMode(_todayViewMode);

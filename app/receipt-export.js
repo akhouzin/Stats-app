@@ -223,9 +223,21 @@ function renderMarchandiseReceiptIframe(iframeId, periodLabel, sections, grandTo
   _recFillIframe(document.getElementById(iframeId), _recBuildMarchandiseDoc(periodLabel, sections, grandTotal, anyMod));
 }
 
-function printReceiptIframe(iframeId) {
+// Both Print and Share fire the instant the user taps the button, which can
+// land before the iframe's own Google Fonts <link> has actually finished
+// downloading (a real race, not hypothetical — the on-screen iframe reflows
+// once the font lands and looks right eventually, but a print/capture taken
+// before that uses whatever fallback font was showing at that moment,
+// producing output that doesn't match the app). Awaiting the iframe's own
+// document.fonts.ready guarantees the real font is in before either runs.
+async function _recAwaitFonts(iframe) {
+  try { await iframe.contentDocument.fonts.ready; } catch (e) {}
+}
+
+async function printReceiptIframe(iframeId) {
   const iframe = document.getElementById(iframeId);
   if (!iframe || !iframe.contentWindow) return;
+  await _recAwaitFonts(iframe);
   iframe.contentWindow.focus();
   iframe.contentWindow.print();
 }
@@ -233,6 +245,7 @@ function printReceiptIframe(iframeId) {
 async function shareReceiptIframe(iframeId, fileName) {
   const iframe = document.getElementById(iframeId);
   if (!iframe || !iframe.contentDocument || typeof html2canvas === 'undefined') return;
+  await _recAwaitFonts(iframe);
   // Capture <body>, not .receipt-page — the side/top margin around the
   // ticket is body's own padding; .receipt-page has none of its own, so
   // screenshotting it directly always came out edge-to-edge no matter what
