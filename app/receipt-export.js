@@ -158,13 +158,19 @@ function renderReceiptIframe(iframeId, sectionTitle, periodLabel, rows, totalLab
 //    row for row (same classes, same 5-column grid, same inline badge
 //    sizing) — the real printed Marchandise ticket, not an approximation.
 const _RECEIPT_MARCH_EXTRA_STYLE = `
+  /* Name (left, 1fr) and line total (right, 1fr) anchor the row's true
+     edges; the qty badge + unit price sit together in the fixed middle
+     track, so — like Articles Vendus' qty column — they land at the row's
+     visual center regardless of name length, instead of hugging whichever
+     side they're declared next to. */
   .rp-marchandise-table .r-item-row.r-item-detailed {
-    display:grid; grid-template-columns:30px 1fr 44px 1fr 82px; column-gap:5px;
+    display:grid; grid-template-columns:1fr 74px 1fr; column-gap:6px;
     align-items:center; margin:4px 0;
   }
+  .rp-marchandise-table .r-item-qtyprice { display:flex; flex-direction:column; align-items:center; gap:1px; }
   .rp-marchandise-table .r-item-qtybadge {
-    display:block; width:30px; min-width:30px; line-height:20px; text-align:center; padding:0;
-    background:#000; color:#fff; font-size:11px; font-weight:900; border-radius:5px;
+    display:block; width:26px; min-width:26px; line-height:18px; text-align:center; padding:0;
+    background:#000; color:#fff; font-size:10px; font-weight:900; border-radius:5px;
   }
   /* white-space/text-overflow reset — the base .r-item-name (for the flat
      Articles Vendus row shape) truncates with an ellipsis on one line;
@@ -173,8 +179,8 @@ const _RECEIPT_MARCH_EXTRA_STYLE = `
      white-space:normal to actually take effect here. */
   .rp-marchandise-table .r-item-name { font-size:11px; min-width:0; white-space:normal; overflow:visible; text-overflow:clip; overflow-wrap:break-word; color:#000; font-weight:bold; }
   .rp-marchandise-table .r-item-variant { font-weight:normal; font-style:italic; font-size:10px; }
-  .rp-marchandise-table .r-item-unitprice { grid-column:3; min-width:0; text-align:center; font-size:10px; font-weight:600; color:#555; }
-  .rp-marchandise-table .r-item-price { grid-column:5; min-width:0; text-align:right; font-weight:900; color:#000; }
+  .rp-marchandise-table .r-item-unitprice { min-width:0; text-align:center; font-size:9px; font-weight:600; color:#555; }
+  .rp-marchandise-table .r-item-price { min-width:0; text-align:right; font-weight:900; color:#000; }
   .rp-marchandise-table .marc-tot-mod { color:#c98a1c; font-weight:700; font-style:normal; }
   .r-subtotal-row { display:flex; justify-content:space-between; font-size:11px; color:#000; font-weight:bold; margin:2px 0 8px; }
 `;
@@ -187,9 +193,11 @@ function _recBuildMarchandiseDoc(periodLabel, sections, grandTotal, anyMod) {
       <div class="r-section-title">— ${sec.catLabel} —</div>
       ${sec.rows.map(r => `
         <div class="r-item-row r-item-detailed">
-          <span class="r-item-qtybadge">${r.qty}</span>
           <span class="r-item-name">${r.name}${r.variant ? ` <span class="r-item-variant">(${r.variant})</span>` : ''}</span>
-          <span class="r-item-unitprice${r.mod ? ' marc-tot-mod' : ''}">× ${r.unitPrice}</span>
+          <span class="r-item-qtyprice">
+            <span class="r-item-qtybadge">${r.qty}</span>
+            <span class="r-item-unitprice${r.mod ? ' marc-tot-mod' : ''}">× ${r.unitPrice}</span>
+          </span>
           <span class="r-item-price">${r.lineTotal} Dhs</span>
         </div>`).join('')}
       <div class="r-subtotal-row"><span>Sous total ${sec.catLabel}</span><span>${sec.catTotal} Dhs</span></div>

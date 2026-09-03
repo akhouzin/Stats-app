@@ -74,6 +74,73 @@ function _pmcBuildArtRows(art, q, onMod) {
   });
 }
 
+// Per-article, per-price-type aggregation across a set of achats (a single
+// day's, or a whole month's) — an article can be bought as Pu AND Pkg in the
+// same window, and/or have more than one achat row of the same type.
+function _pmcAggregateDetailed(achats, artMap) {
+  const byArticle = {};
+  achats.forEach(a => {
+    const art = artMap[a.article_id];
+    if (!art) return; // article since deleted in the POS
+    const cur = byArticle[a.article_id] || {
+      qty_pu: 0, qty_pkg: 0, qty_pl: 0,
+      cost_pu: 0, cost_pkg: 0, cost_pl: 0,
+      mod_pu: false, mod_pkg: false, mod_pl: false,
+    };
+    cur.qty_pu   += a.qty_pu  || 0;
+    cur.cost_pu  += (a.qty_pu  || 0) * _pmcEffectivePrice(art, a, 'pu');
+    if (a.price_pu  != null) cur.mod_pu  = true;
+    cur.qty_pkg  += a.qty_pkg || 0;
+    cur.cost_pkg += (a.qty_pkg || 0) * _pmcEffectivePrice(art, a, 'pkg');
+    if (a.price_pkg != null) cur.mod_pkg = true;
+    cur.qty_pl   += a.qty_pl  || 0;
+    cur.cost_pl  += (a.qty_pl  || 0) * _pmcEffectivePrice(art, a, 'pl');
+    if (a.price_pl  != null) cur.mod_pl  = true;
+    byArticle[a.article_id] = cur;
+  });
+  return byArticle;
+}
+
+// Turns a _pmcAggregateDetailed() result into category-grouped receipt
+// sections (with subtotals) plus the per-category cost map the "Catégorie
+// Vedette" KPI needs — shared by the day and month Marchandise receipts, so
+// both use the identical category-grouped, price-type-detailed shape.
+function _pmcBuildSections(byArticle, artMap, catMap) {
+  let total = 0;
+  const groups = {};
+  const nocat = [];
+  const catCost = {};
+  Object.keys(byArticle).forEach(id => {
+    const art = artMap[id];
+    const q = byArticle[id];
+    const artTotal = q.cost_pu + q.cost_pkg + q.cost_pl;
+    total += artTotal;
+    const row = { art, q, artTotal };
+    const catKey = (art.cat_id && catMap[art.cat_id]) ? art.cat_id : '__nocat__';
+    catCost[catKey] = (catCost[catKey] || 0) + artTotal;
+    if (catKey === '__nocat__') nocat.push(row);
+    else (groups[catKey] = groups[catKey] || []).push(row);
+  });
+
+  let anyMod = false;
+  const onMod = () => { anyMod = true; };
+  const buildSection = (catLabel, rows) => ({
+    catLabel,
+    catTotal: fmtMoney(rows.reduce((s, r) => s + r.artTotal, 0)),
+    rows: rows.slice().sort((a, b) => a.art.nom.localeCompare(b.art.nom)).flatMap(r => _pmcBuildArtRows(r.art, r.q, onMod)),
+  });
+
+  const sortedCats = [..._marcCategories].sort((a, b) => a.sort_order - b.sort_order);
+  const sections = [];
+  sortedCats.forEach(cat => {
+    const rows = groups[cat.id];
+    if (rows && rows.length > 0) sections.push(buildSection(cat.nom, rows));
+  });
+  if (nocat.length > 0) sections.push(buildSection('Sans catégorie', nocat));
+
+  return { sections, total, catCost, anyMod };
+}
+
 function renderMarchandise() {
   const day = _pmcDateForOffset(_pmcDayOffset);
   const iso = toISODate(day);
@@ -100,62 +167,8 @@ function renderMarchandise() {
   const artMap = Object.fromEntries(_marcArticles.map(a => [a.id, a]));
   const catMap = Object.fromEntries(_marcCategories.map(c => [c.id, c]));
 
-  // Per-article, per-price-type aggregation across every achat row that day
-  // (an article can be bought as Pu AND Pkg the same day, and/or have more
-  // than one achat row of the same type).
-  const byArticle = {};
-  dayAchats.forEach(a => {
-    const art = artMap[a.article_id];
-    if (!art) return; // article since deleted in the POS
-    const cur = byArticle[a.article_id] || {
-      qty_pu: 0, qty_pkg: 0, qty_pl: 0,
-      cost_pu: 0, cost_pkg: 0, cost_pl: 0,
-      mod_pu: false, mod_pkg: false, mod_pl: false,
-    };
-    cur.qty_pu   += a.qty_pu  || 0;
-    cur.cost_pu  += (a.qty_pu  || 0) * _pmcEffectivePrice(art, a, 'pu');
-    if (a.price_pu  != null) cur.mod_pu  = true;
-    cur.qty_pkg  += a.qty_pkg || 0;
-    cur.cost_pkg += (a.qty_pkg || 0) * _pmcEffectivePrice(art, a, 'pkg');
-    if (a.price_pkg != null) cur.mod_pkg = true;
-    cur.qty_pl   += a.qty_pl  || 0;
-    cur.cost_pl  += (a.qty_pl  || 0) * _pmcEffectivePrice(art, a, 'pl');
-    if (a.price_pl  != null) cur.mod_pl  = true;
-    byArticle[a.article_id] = cur;
-  });
-
-  let dayTotal = 0;
-  const groups = {};
-  const nocat = [];
-  const catCost = {}; // cat_id (or '__nocat__') -> cost, for the "Catégorie Vedette" KPI
-  Object.keys(byArticle).forEach(id => {
-    const art = artMap[id];
-    const q = byArticle[id];
-    const artTotal = q.cost_pu + q.cost_pkg + q.cost_pl;
-    dayTotal += artTotal;
-    const row = { art, q, artTotal };
-    const catKey = (art.cat_id && catMap[art.cat_id]) ? art.cat_id : '__nocat__';
-    catCost[catKey] = (catCost[catKey] || 0) + artTotal;
-    if (catKey === '__nocat__') nocat.push(row);
-    else (groups[catKey] = groups[catKey] || []).push(row);
-  });
-
-  let anyMod = false;
-  const onMod = () => { anyMod = true; };
-  const buildSection = (catLabel, rows) => ({
-    catLabel,
-    catTotal: fmtMoney(rows.reduce((s, r) => s + r.artTotal, 0)),
-    rows: rows.slice().sort((a, b) => a.art.nom.localeCompare(b.art.nom)).flatMap(r => _pmcBuildArtRows(r.art, r.q, onMod)),
-  });
-
-  const sorted = [..._marcCategories].sort((a, b) => a.sort_order - b.sort_order);
-  const sections = [];
-  sorted.forEach(cat => {
-    const rows = groups[cat.id];
-    if (rows && rows.length > 0) sections.push(buildSection(cat.nom, rows));
-  });
-  if (nocat.length > 0) sections.push(buildSection('Sans catégorie', nocat));
-
+  const byArticle = _pmcAggregateDetailed(dayAchats, artMap);
+  const { sections, total: dayTotal, catCost, anyMod } = _pmcBuildSections(byArticle, artMap, catMap);
   renderMarchandiseReceiptIframe('marc-day-frame', dayLabel, sections, fmtMoney(dayTotal), anyMod);
 
   let topCatKey = null, topCatCost = -1;
@@ -214,26 +227,25 @@ function _pmcAchatCost(art, achat) {
        + (achat.qty_pl  || 0) * _pmcEffectivePrice(art, achat, 'pl');
 }
 
-// Aggregates a set of achats into total cost + per-category + per-article cost/count maps.
-// artCount is how many separate purchase entries (achat rows) exist for that article —
-// "how many times it was bought", not the summed quantity. Categoryless articles are
-// bucketed under '__nocat__' (mirrors the day view's `nocat` list).
+// Aggregates a set of achats into total cost + per-category + per-article cost maps,
+// for the month KPI tiles (Catégorie/Article Vedette, Vs Mois Dernier). Categoryless
+// articles are bucketed under '__nocat__' (mirrors the day view's `nocat` list). The
+// receipt list itself uses _pmcAggregateDetailed()/_pmcBuildSections() instead, which
+// need the per-price-type breakdown this simpler pass doesn't track.
 function _pmcAggregate(achats, artMap, catMap) {
   let total = 0;
   const catCost = {};
   const artCost = {};
-  const artCount = {};
   achats.forEach(a => {
     const art = artMap[a.article_id];
     if (!art) return; // article since deleted in the POS
     const cost = _pmcAchatCost(art, a);
     total += cost;
     artCost[a.article_id] = (artCost[a.article_id] || 0) + cost;
-    artCount[a.article_id] = (artCount[a.article_id] || 0) + 1;
     const catKey = (art.cat_id && catMap[art.cat_id]) ? art.cat_id : '__nocat__';
     catCost[catKey] = (catCost[catKey] || 0) + cost;
   });
-  return { total, catCost, artCost, artCount };
+  return { total, catCost, artCost };
 }
 
 function renderMarchMonth() {
@@ -270,12 +282,12 @@ function renderMarchMonth() {
     document.getElementById('marc-m-avg-line').textContent = fmtMoney(0);
     document.getElementById('marc-m-idle-days').textContent = '—';
     document.getElementById('marc-m-idle-days-sub').textContent = '—';
-    renderReceiptIframe('marc-m-frame', 'ACHATS PAR ARTICLE', periodLabel, [], 'TOTAL', fmtMoney(0));
+    renderMarchandiseReceiptIframe('marc-m-frame', periodLabel, [], fmtMoney(0), false);
     setMarchMonthView(_pmcMonthView);
     return;
   }
 
-  const { total, catCost, artCost, artCount } = _pmcAggregate(monthAchats, artMap, catMap);
+  const { total, catCost, artCost } = _pmcAggregate(monthAchats, artMap, catMap);
   const activeDays = new Set(monthAchats.map(a => a.date)).size;
   const daysInMonth = new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 0).getDate();
   const isCurrentMonth = _pmcMonthOffset === 0;
@@ -337,19 +349,13 @@ function renderMarchMonth() {
   document.getElementById('marc-m-idle-days').textContent = Math.max(0, daysElapsed - activeDays);
   document.getElementById('marc-m-idle-days-sub').textContent = `sur ${daysElapsed} jours`;
 
-  // Per-article breakdown (all categories flattened, ranked by cost) —
-  // rendered as a real POS-ticket-styled receipt (receipt-export.js), same
-  // treatment as page-daily.js's "Articles vendus — ce mois". qty here is
-  // how many separate times the article was bought this month (artCount),
-  // not a summed quantity — the Catégorie/Article Vedette KPI tiles above
-  // already surface the category angle, so this list stays a flat ranking
-  // rather than duplicating category subtotals.
-  const rankedArtIds = Object.keys(artCost).filter(id => artMap[id]).sort((a, b) => artCost[b] - artCost[a]);
-  renderReceiptIframe(
-    'marc-m-frame', 'ACHATS PAR ARTICLE', periodLabel,
-    rankedArtIds.map(id => ({ name: artMap[id].nom, qty: artCount[id], amount: fmtMoney(artCost[id]) })),
-    'TOTAL', fmtMoney(total)
-  );
+  // Same category-grouped, price-type-detailed receipt as the day view
+  // (_pmcAggregateDetailed()/_pmcBuildSections()), just over the whole
+  // month's achats instead of one day's — the monthly ticket now matches
+  // the daily one exactly instead of being a flatter approximation.
+  const monthByArticle = _pmcAggregateDetailed(monthAchats, artMap);
+  const { sections: monthSections, anyMod: monthAnyMod } = _pmcBuildSections(monthByArticle, artMap, catMap);
+  renderMarchandiseReceiptIframe('marc-m-frame', periodLabel, monthSections, fmtMoney(total), monthAnyMod);
 
   setMarchMonthView(_pmcMonthView);
 }
