@@ -210,12 +210,18 @@
     <div class="minv-period-range" id="marc-day-label" style="margin:0;">—</div>
     <button class="day-nav-btn" id="marc-day-next" onclick="changeMarchDay(1)">›</button>
   </div>
+  <div class="kpi-grid" id="marc-kpi-grid">
+    <div class="kpi"><div class="kpi-label">Total du jour</div><div class="kpi-value green" id="marc-kpi-total">—</div><div class="kpi-sub">Dhs</div></div>
+    <div class="kpi"><div class="kpi-label">Achats</div><div class="kpi-value" id="marc-kpi-count">—</div><div class="kpi-sub">lignes</div></div>
+    <div class="kpi"><div class="kpi-label">Articles</div><div class="kpi-value" id="marc-kpi-articles">—</div><div class="kpi-sub">distincts</div></div>
+    <div class="kpi"><div class="kpi-label">Catégorie Vedette</div><div class="kpi-value" id="marc-kpi-cat">—</div><div class="kpi-sub" id="marc-kpi-cat-sub">—</div></div>
+  </div>
   <div class="card" id="marc-card">
-    <div class="marc-total-row">
-      <span class="marc-total-label">Total du jour</span>
-      <span class="marc-total-val" id="marc-day-total">—</span>
-    </div>
     <div id="marc-table-wrap"></div>
+    <div class="marc-receipt-total">
+      <span>TOTAL GÉNÉRAL</span>
+      <span id="marc-day-total">—</span>
+    </div>
   </div>
 </div>
 

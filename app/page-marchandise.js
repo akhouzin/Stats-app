@@ -44,6 +44,7 @@ function renderMarchandise() {
   if (_marcArticles.length === 0) {
     wrap.innerHTML = '<div class="empty">Aucun article configuré dans Marchandise.</div>';
     totalEl.textContent = fmtMoney(0);
+    _pmcRenderKpis(0, 0, 0, null, 0);
     return;
   }
 
@@ -51,6 +52,7 @@ function renderMarchandise() {
   if (dayAchats.length === 0) {
     wrap.innerHTML = '<div class="empty">Aucun achat ce jour-là.</div>';
     totalEl.textContent = fmtMoney(0);
+    _pmcRenderKpis(0, 0, 0, null, 0);
     return;
   }
 
@@ -74,13 +76,16 @@ function renderMarchandise() {
   let dayTotal = 0;
   const groups = {};
   const nocat = [];
+  const catCost = {}; // cat_id (or '__nocat__') -> cost, for the "Catégorie Vedette" KPI
   Object.keys(byArticle).forEach(id => {
     const art = artMap[id];
     const q = byArticle[id];
     dayTotal += q.cost;
     const row = { art, q, cost: q.cost };
-    if (art.cat_id && catMap[art.cat_id]) (groups[art.cat_id] = groups[art.cat_id] || []).push(row);
-    else nocat.push(row);
+    const catKey = (art.cat_id && catMap[art.cat_id]) ? art.cat_id : '__nocat__';
+    catCost[catKey] = (catCost[catKey] || 0) + q.cost;
+    if (catKey === '__nocat__') nocat.push(row);
+    else (groups[catKey] = groups[catKey] || []).push(row);
   });
 
   const buildRow = ({ art, q, cost }) => {
@@ -115,4 +120,17 @@ function renderMarchandise() {
 
   wrap.innerHTML = html;
   totalEl.textContent = fmtMoney(dayTotal);
+
+  let topCatKey = null, topCatCost = -1;
+  Object.keys(catCost).forEach(k => { if (catCost[k] > topCatCost) { topCatKey = k; topCatCost = catCost[k]; } });
+  const topCatName = topCatKey === null ? null : (topCatKey === '__nocat__' ? 'Sans catégorie' : catMap[topCatKey].nom);
+  _pmcRenderKpis(dayTotal, dayAchats.length, Object.keys(byArticle).length, topCatName, topCatCost);
+}
+
+function _pmcRenderKpis(total, lineCount, articleCount, topCatName, topCatCost) {
+  document.getElementById('marc-kpi-total').textContent = fmtMoney(total);
+  document.getElementById('marc-kpi-count').textContent = lineCount;
+  document.getElementById('marc-kpi-articles').textContent = articleCount;
+  document.getElementById('marc-kpi-cat').textContent = topCatName || '—';
+  document.getElementById('marc-kpi-cat-sub').textContent = topCatName ? fmtMoney(topCatCost) : '—';
 }

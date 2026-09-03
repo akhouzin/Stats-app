@@ -212,9 +212,16 @@
   .minv-link-none { color:var(--text-dim); font-size:12px; }
 
   /* MARCHANDISE */
-  .marc-total-row { display:flex; align-items:center; justify-content:space-between; padding:0 0 12px; margin-bottom:8px; border-bottom:2px solid var(--border); }
-  .marc-total-label { font-family:'Cinzel',serif; font-size:10px; letter-spacing:1px; color:var(--text-dim); text-transform:uppercase; }
-  .marc-total-val { font-family:'Cormorant Garamond',serif; font-size:20px; font-weight:700; color:var(--green-dark); }
+  /* Mirrors legacy/app/marchandise.js's printed receipt total row
+     (pos.css .r-total-row inside .receipt-page: Courier, #000, weight 900)
+     and the same printed-ticket convention already used elsewhere in Stats
+     (.hc-total/.live-order-total: dashed top border, right-aligned bold) —
+     "TOTAL GÉNÉRAL" wording matches the printed ticket verbatim. */
+  .marc-receipt-total {
+    display:flex; align-items:center; justify-content:space-between;
+    margin-top:10px; padding-top:10px; border-top:1px dashed #bbb;
+    font-family:'Courier New',Courier,monospace; font-weight:900; font-size:16px; color:#000;
+  }
 
   /* SALAIRE */
   .sal-top-bar { display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; }
