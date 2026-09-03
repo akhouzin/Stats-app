@@ -205,22 +205,66 @@
 
 <!-- MARCHANDISE PAGE -->
 <div class="page" id="page-marchandise">
-  <div class="day-nav">
-    <button class="day-nav-btn" id="marc-day-prev" onclick="changeMarchDay(-1)">‹</button>
-    <div class="minv-period-range" id="marc-day-label" style="margin:0;">—</div>
-    <button class="day-nav-btn" id="marc-day-next" onclick="changeMarchDay(1)">›</button>
+  <div class="inv-period-bar">
+    <button class="inv-period-btn active" id="marc-scope-btn-day" onclick="setMarchScope('day')">Jour</button>
+    <button class="inv-period-btn" id="marc-scope-btn-month" onclick="setMarchScope('month')">Mois</button>
   </div>
-  <div class="kpi-grid" id="marc-kpi-grid">
-    <div class="kpi"><div class="kpi-label">Total du jour</div><div class="kpi-value green" id="marc-kpi-total">—</div><div class="kpi-sub">Dhs</div></div>
-    <div class="kpi"><div class="kpi-label">Achats</div><div class="kpi-value" id="marc-kpi-count">—</div><div class="kpi-sub">lignes</div></div>
-    <div class="kpi"><div class="kpi-label">Articles</div><div class="kpi-value" id="marc-kpi-articles">—</div><div class="kpi-sub">distincts</div></div>
-    <div class="kpi"><div class="kpi-label">Catégorie Vedette</div><div class="kpi-value" id="marc-kpi-cat">—</div><div class="kpi-sub" id="marc-kpi-cat-sub">—</div></div>
+
+  <!-- Day scope -->
+  <div id="marc-view-day">
+    <div class="day-nav">
+      <button class="day-nav-btn" id="marc-day-prev" onclick="changeMarchDay(-1)">‹</button>
+      <div class="minv-period-range" id="marc-day-label" style="margin:0;">—</div>
+      <button class="day-nav-btn" id="marc-day-next" onclick="changeMarchDay(1)">›</button>
+    </div>
+    <div class="kpi-grid" id="marc-kpi-grid">
+      <div class="kpi"><div class="kpi-label">Total du jour</div><div class="kpi-value green" id="marc-kpi-total">—</div><div class="kpi-sub">Dhs</div></div>
+      <div class="kpi"><div class="kpi-label">Achats</div><div class="kpi-value" id="marc-kpi-count">—</div><div class="kpi-sub">lignes</div></div>
+      <div class="kpi"><div class="kpi-label">Articles</div><div class="kpi-value" id="marc-kpi-articles">—</div><div class="kpi-sub">distincts</div></div>
+      <div class="kpi"><div class="kpi-label">Catégorie Vedette</div><div class="kpi-value" id="marc-kpi-cat">—</div><div class="kpi-sub" id="marc-kpi-cat-sub">—</div></div>
+    </div>
+    <div class="card" id="marc-card">
+      <div id="marc-table-wrap"></div>
+      <div class="marc-receipt-total">
+        <span>TOTAL GÉNÉRAL</span>
+        <span id="marc-day-total">—</span>
+      </div>
+    </div>
   </div>
-  <div class="card" id="marc-card">
-    <div id="marc-table-wrap"></div>
-    <div class="marc-receipt-total">
-      <span>TOTAL GÉNÉRAL</span>
-      <span id="marc-day-total">—</span>
+
+  <!-- Month scope -->
+  <div id="marc-view-month" style="display:none;">
+    <div class="day-nav">
+      <button class="day-nav-btn" id="marc-month-prev" onclick="changeMarchMonth(-1)">‹</button>
+      <div class="minv-period-range" id="marc-month-label" style="margin:0;">—</div>
+      <button class="day-nav-btn" id="marc-month-next" onclick="changeMarchMonth(1)">›</button>
+    </div>
+    <div class="inv-period-bar">
+      <button class="inv-period-btn active" id="marc-mview-btn-simple" onclick="setMarchMonthView('simple')">Résumé</button>
+      <button class="inv-period-btn" id="marc-mview-btn-cats" onclick="setMarchMonthView('cats')">Catégories</button>
+      <button class="inv-period-btn" id="marc-mview-btn-trends" onclick="setMarchMonthView('trends')">Tendances</button>
+    </div>
+    <div class="kpi-grid" id="marc-mkpi-simple">
+      <div class="kpi"><div class="kpi-label">Total du mois</div><div class="kpi-value green" id="marc-m-total">—</div><div class="kpi-sub">Dhs</div></div>
+      <div class="kpi"><div class="kpi-label">Achats</div><div class="kpi-value" id="marc-m-count">—</div><div class="kpi-sub">lignes</div></div>
+      <div class="kpi"><div class="kpi-label">Jours Actifs</div><div class="kpi-value" id="marc-m-active-days">—</div><div class="kpi-sub" id="marc-m-active-days-sub">—</div></div>
+      <div class="kpi"><div class="kpi-label">Moyenne / Jour Actif</div><div class="kpi-value" id="marc-m-day-avg">—</div><div class="kpi-sub">Dhs</div></div>
+    </div>
+    <div class="kpi-grid" id="marc-mkpi-cats" style="display:none;">
+      <div class="kpi"><div class="kpi-label">Catégorie Vedette</div><div class="kpi-value" id="marc-m-top-cat">—</div><div class="kpi-sub" id="marc-m-top-cat-sub">—</div></div>
+      <div class="kpi"><div class="kpi-label">Part Catégorie Vedette</div><div class="kpi-value" id="marc-m-top-cat-pct">—</div><div class="kpi-sub">du total</div></div>
+      <div class="kpi"><div class="kpi-label">Article Vedette</div><div class="kpi-value" id="marc-m-top-art">—</div><div class="kpi-sub" id="marc-m-top-art-sub">—</div></div>
+      <div class="kpi"><div class="kpi-label">Catégories Actives</div><div class="kpi-value" id="marc-m-cat-count">—</div><div class="kpi-sub">ce mois</div></div>
+    </div>
+    <div class="kpi-grid" id="marc-mkpi-trends" style="display:none;">
+      <div class="kpi"><div class="kpi-label">Vs Mois Dernier</div><div class="kpi-value" id="marc-m-trend">—</div><div class="kpi-sub" id="marc-m-trend-sub">—</div></div>
+      <div class="kpi"><div class="kpi-label">Meilleur Jour</div><div class="kpi-value" id="marc-m-best-day">—</div><div class="kpi-sub" id="marc-m-best-day-sub">—</div></div>
+      <div class="kpi"><div class="kpi-label">Achat Moyen</div><div class="kpi-value" id="marc-m-avg-line">—</div><div class="kpi-sub">Dhs / ligne</div></div>
+      <div class="kpi"><div class="kpi-label">Jours Sans Achat</div><div class="kpi-value" id="marc-m-idle-days">—</div><div class="kpi-sub" id="marc-m-idle-days-sub">—</div></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Achats du mois — par catégorie</div>
+      <div id="marc-m-cat-list" class="scroll-list"></div>
     </div>
   </div>
 </div>

@@ -12,6 +12,9 @@
 // its data. Reuses page-inventory.js's toISODate()/_minvFmt() (loads earlier).
 
 let _pmcDayOffset = 0;
+let _pmcScope = 'day';        // 'day' | 'month' — top-level toggle, mirrors page-inventory.js's period-bar convention
+let _pmcMonthOffset = 0;      // months back from the current one, for the Month scope's own nav
+let _pmcMonthView = 'simple'; // 'simple' | 'cats' | 'trends' — mirrors page-daily.js's Rapport view-mode tabs
 
 function _pmcEffectivePrice(art, achat, type) {
   const override = achat[`price_${type}`];
@@ -31,6 +34,15 @@ function changeMarchDay(dir) {
   renderMarchandise();
 }
 
+function setMarchScope(scope) {
+  _pmcScope = scope;
+  document.getElementById('marc-scope-btn-day').classList.toggle('active', scope === 'day');
+  document.getElementById('marc-scope-btn-month').classList.toggle('active', scope === 'month');
+  document.getElementById('marc-view-day').style.display = scope === 'day' ? 'block' : 'none';
+  document.getElementById('marc-view-month').style.display = scope === 'month' ? 'block' : 'none';
+  if (scope === 'month') renderMarchMonth();
+}
+
 function renderMarchandise() {
   const day = _pmcDateForOffset(_pmcDayOffset);
   const iso = toISODate(day);
@@ -45,6 +57,7 @@ function renderMarchandise() {
     wrap.innerHTML = '<div class="empty">Aucun article configuré dans Marchandise.</div>';
     totalEl.textContent = fmtMoney(0);
     _pmcRenderKpis(0, 0, 0, null, 0);
+    if (_pmcScope === 'month') renderMarchMonth();
     return;
   }
 
@@ -53,6 +66,7 @@ function renderMarchandise() {
     wrap.innerHTML = '<div class="empty">Aucun achat ce jour-là.</div>';
     totalEl.textContent = fmtMoney(0);
     _pmcRenderKpis(0, 0, 0, null, 0);
+    if (_pmcScope === 'month') renderMarchMonth();
     return;
   }
 
@@ -125,6 +139,8 @@ function renderMarchandise() {
   Object.keys(catCost).forEach(k => { if (catCost[k] > topCatCost) { topCatKey = k; topCatCost = catCost[k]; } });
   const topCatName = topCatKey === null ? null : (topCatKey === '__nocat__' ? 'Sans catégorie' : catMap[topCatKey].nom);
   _pmcRenderKpis(dayTotal, dayAchats.length, Object.keys(byArticle).length, topCatName, topCatCost);
+
+  if (_pmcScope === 'month') renderMarchMonth();
 }
 
 function _pmcRenderKpis(total, lineCount, articleCount, topCatName, topCatCost) {
@@ -133,4 +149,180 @@ function _pmcRenderKpis(total, lineCount, articleCount, topCatName, topCatCost) 
   document.getElementById('marc-kpi-articles').textContent = articleCount;
   document.getElementById('marc-kpi-cat').textContent = topCatName || '—';
   document.getElementById('marc-kpi-cat-sub').textContent = topCatName ? fmtMoney(topCatCost) : '—';
+}
+
+// ═══════════════════════════════════════
+// MONTH SCOPE — mirrors page-daily.js's Rapport: a month-nav plus several
+// specialized KPI-tab views (Résumé/Catégories/Tendances), each reading the
+// same already-loaded _marcAchats (fetchMarcAchats() has no date filter —
+// the whole purchase history is in memory, so month aggregation needs no
+// extra fetch, unlike allOrders which is lazy-loaded per month).
+// ═══════════════════════════════════════
+
+function _pmcMonthDate(offset) {
+  const d = new Date();
+  d.setDate(1); // pin to day 1 first so setMonth() can't overflow into the wrong month on a 29-31 day source date
+  d.setMonth(d.getMonth() + offset);
+  return d;
+}
+
+function changeMarchMonth(dir) {
+  const next = _pmcMonthOffset + dir;
+  if (next > 0) return; // can't navigate into the future
+  _pmcMonthOffset = next;
+  renderMarchMonth();
+}
+
+function setMarchMonthView(mode) {
+  _pmcMonthView = mode;
+  document.getElementById('marc-mview-btn-simple').classList.toggle('active', mode === 'simple');
+  document.getElementById('marc-mview-btn-cats').classList.toggle('active', mode === 'cats');
+  document.getElementById('marc-mview-btn-trends').classList.toggle('active', mode === 'trends');
+  document.getElementById('marc-mkpi-simple').style.display = mode === 'simple' ? 'grid' : 'none';
+  document.getElementById('marc-mkpi-cats').style.display = mode === 'cats' ? 'grid' : 'none';
+  document.getElementById('marc-mkpi-trends').style.display = mode === 'trends' ? 'grid' : 'none';
+}
+
+// Per-line cost for one achat row, using the same catalog-price-unless-overridden
+// rule as the day view (_pmcEffectivePrice) and the printed POS receipt.
+function _pmcAchatCost(art, achat) {
+  return (achat.qty_pu  || 0) * _pmcEffectivePrice(art, achat, 'pu')
+       + (achat.qty_pkg || 0) * _pmcEffectivePrice(art, achat, 'pkg')
+       + (achat.qty_pl  || 0) * _pmcEffectivePrice(art, achat, 'pl');
+}
+
+// Aggregates a set of achats into total cost + per-category + per-article cost maps.
+// Categoryless articles are bucketed under '__nocat__' (mirrors the day view's `nocat` list).
+function _pmcAggregate(achats, artMap, catMap) {
+  let total = 0;
+  const catCost = {};
+  const artCost = {};
+  achats.forEach(a => {
+    const art = artMap[a.article_id];
+    if (!art) return; // article since deleted in the POS
+    const cost = _pmcAchatCost(art, a);
+    total += cost;
+    artCost[a.article_id] = (artCost[a.article_id] || 0) + cost;
+    const catKey = (art.cat_id && catMap[art.cat_id]) ? art.cat_id : '__nocat__';
+    catCost[catKey] = (catCost[catKey] || 0) + cost;
+  });
+  return { total, catCost, artCost };
+}
+
+function renderMarchMonth() {
+  const monthDate = _pmcMonthDate(_pmcMonthOffset);
+  const monthLabel = monthDate.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+  document.getElementById('marc-month-label').textContent = monthLabel.charAt(0).toUpperCase() + monthLabel.slice(1);
+  document.getElementById('marc-month-next').disabled = _pmcMonthOffset >= 0;
+
+  const artMap = Object.fromEntries(_marcArticles.map(a => [a.id, a]));
+  const catMap = Object.fromEntries(_marcCategories.map(c => [c.id, c]));
+
+  const monthStartIso = toISODate(monthDate);
+  const nextMonthIso = toISODate(new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 1));
+  const monthAchats = _marcAchats.filter(a => a.date >= monthStartIso && a.date < nextMonthIso);
+
+  const catListEl = document.getElementById('marc-m-cat-list');
+
+  if (monthAchats.length === 0) {
+    document.getElementById('marc-m-total').textContent = fmtMoney(0);
+    document.getElementById('marc-m-count').textContent = '0';
+    document.getElementById('marc-m-active-days').textContent = '0';
+    document.getElementById('marc-m-active-days-sub').textContent = '—';
+    document.getElementById('marc-m-day-avg').textContent = fmtMoney(0);
+    document.getElementById('marc-m-top-cat').textContent = '—';
+    document.getElementById('marc-m-top-cat-sub').textContent = '—';
+    document.getElementById('marc-m-top-cat-pct').textContent = '—';
+    document.getElementById('marc-m-top-art').textContent = '—';
+    document.getElementById('marc-m-top-art-sub').textContent = '—';
+    document.getElementById('marc-m-cat-count').textContent = '0';
+    document.getElementById('marc-m-trend').textContent = '—';
+    document.getElementById('marc-m-trend').className = 'kpi-value';
+    document.getElementById('marc-m-trend-sub').textContent = '—';
+    document.getElementById('marc-m-best-day').textContent = '—';
+    document.getElementById('marc-m-best-day-sub').textContent = '—';
+    document.getElementById('marc-m-avg-line').textContent = fmtMoney(0);
+    document.getElementById('marc-m-idle-days').textContent = '—';
+    document.getElementById('marc-m-idle-days-sub').textContent = '—';
+    catListEl.innerHTML = '<div class="empty">Aucun achat ce mois-ci.</div>';
+    setMarchMonthView(_pmcMonthView);
+    return;
+  }
+
+  const { total, catCost, artCost } = _pmcAggregate(monthAchats, artMap, catMap);
+  const activeDays = new Set(monthAchats.map(a => a.date)).size;
+  const daysInMonth = new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 0).getDate();
+  const isCurrentMonth = _pmcMonthOffset === 0;
+  const daysElapsed = isCurrentMonth ? new Date().getDate() : daysInMonth;
+
+  // Résumé
+  document.getElementById('marc-m-total').textContent = fmtMoney(total);
+  document.getElementById('marc-m-count').textContent = monthAchats.length;
+  document.getElementById('marc-m-active-days').textContent = activeDays;
+  document.getElementById('marc-m-active-days-sub').textContent = `sur ${daysElapsed} jours`;
+  document.getElementById('marc-m-day-avg').textContent = fmtMoney(total / activeDays);
+
+  // Catégories
+  const rankedCats = Object.entries(catCost).sort((a, b) => b[1] - a[1]);
+  const [topCatKey, topCatCost] = rankedCats[0];
+  const topCatName = topCatKey === '__nocat__' ? 'Sans catégorie' : catMap[topCatKey].nom;
+  document.getElementById('marc-m-top-cat').textContent = topCatName;
+  document.getElementById('marc-m-top-cat-sub').textContent = `${fmtMoney(topCatCost)} Dhs`;
+  document.getElementById('marc-m-top-cat-pct').textContent = `${(topCatCost / total * 100).toFixed(0)}%`;
+  document.getElementById('marc-m-cat-count').textContent = rankedCats.filter(([k]) => k !== '__nocat__').length;
+
+  const rankedArts = Object.entries(artCost).sort((a, b) => b[1] - a[1]);
+  const [topArtId, topArtCost] = rankedArts[0];
+  const topArt = artMap[topArtId];
+  document.getElementById('marc-m-top-art').textContent = topArt ? topArt.nom : '—';
+  document.getElementById('marc-m-top-art-sub').textContent = `${fmtMoney(topArtCost)} Dhs`;
+
+  // Tendances
+  const prevMonthDate = _pmcMonthDate(_pmcMonthOffset - 1);
+  const prevMonthStartIso = toISODate(prevMonthDate);
+  const prevMonthAchats = _marcAchats.filter(a => a.date >= prevMonthStartIso && a.date < monthStartIso);
+  const trendEl = document.getElementById('marc-m-trend');
+  const trendSubEl = document.getElementById('marc-m-trend-sub');
+  if (prevMonthAchats.length) {
+    const prevTotal = _pmcAggregate(prevMonthAchats, artMap, catMap).total;
+    const delta = prevTotal > 0 ? ((total - prevTotal) / prevTotal * 100) : null;
+    // Spending going UP is the "bad" direction for a cost report (opposite of Rapport's revenue trend).
+    trendEl.textContent = delta === null ? '—' : (delta >= 0 ? '+' : '') + delta.toFixed(0) + '%';
+    trendEl.className = 'kpi-value' + (delta === null ? '' : (delta >= 0 ? ' red' : ' green'));
+    trendSubEl.textContent = `vs ${fmtMoney(prevTotal)} Dhs`;
+  } else {
+    trendEl.textContent = '—';
+    trendEl.className = 'kpi-value';
+    trendSubEl.textContent = 'Pas de données';
+  }
+
+  const dayTotals = {};
+  monthAchats.forEach(a => {
+    const art = artMap[a.article_id];
+    if (!art) return;
+    dayTotals[a.date] = (dayTotals[a.date] || 0) + _pmcAchatCost(art, a);
+  });
+  const [bestDayIso, bestDayCost] = Object.entries(dayTotals).sort((a, b) => b[1] - a[1])[0];
+  const bestDayDate = new Date(bestDayIso + 'T00:00:00');
+  document.getElementById('marc-m-best-day').textContent = bestDayDate.toLocaleDateString('fr-FR', { weekday: 'short', day: '2-digit', month: 'short' });
+  document.getElementById('marc-m-best-day-sub').textContent = `${fmtMoney(bestDayCost)} Dhs`;
+
+  document.getElementById('marc-m-avg-line').textContent = fmtMoney(total / monthAchats.length);
+  document.getElementById('marc-m-idle-days').textContent = Math.max(0, daysElapsed - activeDays);
+  document.getElementById('marc-m-idle-days-sub').textContent = `sur ${daysElapsed} jours`;
+
+  // Category breakdown list — printed-ticket row shape (see marc-receipt-total's
+  // convention), reused here for name/share/cost instead of name/qty/price.
+  catListEl.innerHTML = rankedCats.map(([key, cost]) => {
+    const name = key === '__nocat__' ? 'Sans catégorie' : catMap[key].nom;
+    const pct = (cost / total * 100).toFixed(0);
+    return `
+      <div class="ticket-item-row">
+        <span class="ticket-item-name">${name}</span>
+        <span class="ticket-item-qty">${pct}%</span>
+        <span class="ticket-item-price">${fmtMoney(cost)} Dhs</span>
+      </div>`;
+  }).join('');
+
+  setMarchMonthView(_pmcMonthView);
 }
