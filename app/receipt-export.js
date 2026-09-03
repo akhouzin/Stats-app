@@ -78,7 +78,9 @@ function _recBuildDoc(sectionTitle, periodLabel, rows, totalLabel, totalValue) {
       <span class="r-item-price">${r.amount} Dhs</span>
     </div>`).join('') : '<div class="r-meta">Aucun article</div>';
 
-  return `<!doctype html><html><head><meta charset="utf-8"><style>${_RECEIPT_IFRAME_STYLE}</style></head><body>
+  return `<!doctype html><html><head><meta charset="utf-8">
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700;900&family=Cinzel+Decorative:wght@400;700;900&display=swap" rel="stylesheet">
+    <style>${_RECEIPT_IFRAME_STYLE}</style></head><body>
     <div class="receipt-page">
       ${logoVisible ? `<div class="r-logo-wrap"><img src="${logoEl.src}"></div>` : ''}
       <div class="r-brand">${bizName.toUpperCase()}</div>
