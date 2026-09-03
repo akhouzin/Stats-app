@@ -241,17 +241,6 @@
   .receipt-icon-btn:hover { background:rgba(20,20,20,0.85); }
   .receipt-icon-btn:active { transform:scale(0.9); }
 
-  /* MARCHANDISE */
-  /* Mirrors legacy/app/marchandise.js's printed receipt total row
-     (pos.css .r-total-row inside .receipt-page: Courier, #000, weight 900)
-     and the same printed-ticket convention already used elsewhere in Stats
-     (.hc-total/.live-order-total: dashed top border, right-aligned bold) —
-     "TOTAL GÉNÉRAL" wording matches the printed ticket verbatim. */
-  .marc-receipt-total {
-    display:flex; align-items:center; justify-content:space-between;
-    margin-top:10px; padding-top:10px; border-top:1px dashed #bbb;
-    font-family:'Courier New',Courier,monospace; font-weight:900; font-size:16px; color:#000;
-  }
 
   /* SALAIRE */
   .sal-top-bar { display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; }

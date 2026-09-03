@@ -1,10 +1,17 @@
 // ═══════════════════════════════════════
-// RECEIPT EXPORT — renders an "Articles vendus" list inside an <iframe>
-// styled like the ticket the POS itself prints/sends to Telegram. Sits in a
-// thin, sharp-edged black frame (.receipt-shell, in stats.css) — narrower
-// than the surrounding card, like a photo thumbnail, not stretched full
-// width. Print/Share are small circular icon buttons (inline SVG, not
-// emoji) overlaid on the ticket, hidden until the ticket itself is tapped
+// RECEIPT EXPORT — renders a list inside an <iframe> styled like the ticket
+// the POS itself prints/sends to Telegram, full width of its container, no
+// card styling of its own. Two consumers share this module:
+//   - renderReceiptIframe()            — flat name/×qty/price rows
+//     (page-today.js's daily "Articles Vendus", page-daily.js's monthly
+//     "Articles vendus — ce mois", page-marchandise.js's monthly
+//     "Achats du mois").
+//   - renderMarchandiseReceiptIframe() — category-grouped rows with a qty
+//     badge + unit price + per-category subtotal, matching
+//     legacy/app/marchandise.js:printMarchandiseDuJour() row for row
+//     (page-marchandise.js's daily view).
+// Print/Share are small circular icon buttons (inline SVG, not emoji)
+// overlaid on the ticket, hidden until the ticket itself is tapped
 // (toggleReceiptControls() below) — a lightbox/photo-viewer convention,
 // deliberately not styled like this page's other (large, labeled) buttons.
 //
@@ -17,10 +24,11 @@
 // user stays in the loop as the one choosing the destination. Falls back to
 // downloading the PNG when the browser has no file-capable Web Share.
 //
-// The iframe gets its own embedded <style> (srcdoc creates a fully separate
-// document — it does NOT inherit stats.css), so only the outer chrome
-// (.receipt-shell/.receipt-tap-overlay/.receipt-toolbar-mini/
-// .receipt-icon-btn/.receipt-frame) lives in stats.css.
+// Each iframe gets its own embedded <style>/<link> (srcdoc creates a fully
+// separate document — it does NOT inherit stats.css or index.html's own
+// font <link>), so only the outer chrome (.receipt-shell/
+// .receipt-tap-overlay/.receipt-toolbar-mini/.receipt-icon-btn/
+// .receipt-frame) lives in stats.css.
 // ═══════════════════════════════════════
 
 // Tap-to-reveal — the ticket itself has no interactive content, so a
@@ -61,15 +69,36 @@ const _RECEIPT_IFRAME_STYLE = `
   .r-thank { font-size:11px; text-align:center; color:#000; font-weight:bold; margin:6px 0 0; }
 `;
 
-// rows: [{name, qty, amount}] — amount already fmtMoney()-formatted.
-function _recBuildDoc(sectionTitle, periodLabel, rows, totalLabel, totalValue) {
+// Common <head> bits every receipt document needs: charset, the real POS
+// ticket fonts (see the top-of-file note — an iframe's srcdoc document is
+// fully separate from the parent page and does NOT inherit its <link>
+// tags), and a given <style> block.
+function _recHead(styleCss) {
+  return `<meta charset="utf-8">
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700;900&family=Cinzel+Decorative:wght@400;700;900&display=swap" rel="stylesheet">
+    <style>${styleCss}</style>`;
+}
+
+// Business name/logo — read live off the topbar (branding.js keeps these in
+// sync with the connected POS), shared by every receipt variant below.
+function _recBizIdentity() {
   const nameEl = document.getElementById('topbar-biz-name');
   const logoEl = document.getElementById('topbar-biz-logo');
-  const bizName = (nameEl && nameEl.textContent) || 'ERPGEN';
-  const logoVisible = !!(logoEl && logoEl.src && logoEl.style.display !== 'none');
+  return {
+    bizName: (nameEl && nameEl.textContent) || 'ERPGEN',
+    logoSrc: logoEl && logoEl.src && logoEl.style.display !== 'none' ? logoEl.src : '',
+  };
+}
+
+function _recPrintedAt() {
   const now = new Date();
-  const printedAt = now.toLocaleDateString('fr-MA', { day: '2-digit', month: '2-digit', year: 'numeric' })
+  return now.toLocaleDateString('fr-MA', { day: '2-digit', month: '2-digit', year: 'numeric' })
     + ' ' + now.toLocaleTimeString('fr-MA', { hour: '2-digit', minute: '2-digit' });
+}
+
+// rows: [{name, qty, amount}] — amount already fmtMoney()-formatted.
+function _recBuildDoc(sectionTitle, periodLabel, rows, totalLabel, totalValue) {
+  const { bizName, logoSrc } = _recBizIdentity();
 
   const itemsHtml = rows.length ? rows.map(r => `
     <div class="r-item-row">
@@ -78,16 +107,14 @@ function _recBuildDoc(sectionTitle, periodLabel, rows, totalLabel, totalValue) {
       <span class="r-item-price">${r.amount} Dhs</span>
     </div>`).join('') : '<div class="r-meta">Aucun article</div>';
 
-  return `<!doctype html><html><head><meta charset="utf-8">
-    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700;900&family=Cinzel+Decorative:wght@400;700;900&display=swap" rel="stylesheet">
-    <style>${_RECEIPT_IFRAME_STYLE}</style></head><body>
+  return `<!doctype html><html><head>${_recHead(_RECEIPT_IFRAME_STYLE)}</head><body>
     <div class="receipt-page">
-      ${logoVisible ? `<div class="r-logo-wrap"><img src="${logoEl.src}"></div>` : ''}
+      ${logoSrc ? `<div class="r-logo-wrap"><img src="${logoSrc}"></div>` : ''}
       <div class="r-brand">${bizName.toUpperCase()}</div>
       <hr class="r-divider-solid">
       <div class="r-section-title">${sectionTitle}</div>
       <div class="r-meta">${periodLabel}</div>
-      <div class="r-meta">Imprimé le ${printedAt}</div>
+      <div class="r-meta">Imprimé le ${_recPrintedAt()}</div>
       <hr class="r-divider-solid">
       ${itemsHtml}
       <hr class="r-divider-solid">
@@ -97,15 +124,15 @@ function _recBuildDoc(sectionTitle, periodLabel, rows, totalLabel, totalValue) {
   </body></html>`;
 }
 
-// Fills the iframe and keeps its height continuously synced to the rendered
-// content — an iframe has no natural height of its own otherwise. A single
-// onload-time measurement isn't enough: the business logo (an <img> with no
-// intrinsic size reserved) can still be loading when onload fires, so a
-// one-shot scrollHeight read can under-measure and leave stale blank space
-// once the image lands. A ResizeObserver on the iframe's own body reacts to
-// that (and any other) later layout change instead of guessing at timing.
-function renderReceiptIframe(iframeId, sectionTitle, periodLabel, rows, totalLabel, totalValue) {
-  const iframe = document.getElementById(iframeId);
+// Fills the iframe with a given HTML document and keeps its height
+// continuously synced to the rendered content — an iframe has no natural
+// height of its own otherwise. A single onload-time measurement isn't
+// enough: the business logo (an <img> with no intrinsic size reserved) can
+// still be loading when onload fires, so a one-shot scrollHeight read can
+// under-measure and leave stale blank space once the image lands. A
+// ResizeObserver on the iframe's own body reacts to that (and any other)
+// later layout change instead of guessing at timing.
+function _recFillIframe(iframe, htmlDoc) {
   if (!iframe) return;
   iframe.onload = () => {
     try {
@@ -118,7 +145,78 @@ function renderReceiptIframe(iframeId, sectionTitle, periodLabel, rows, totalLab
       iframe._recHeightObserver = ro;
     } catch (e) {}
   };
-  iframe.srcdoc = _recBuildDoc(sectionTitle, periodLabel, rows, totalLabel, totalValue);
+  iframe.srcdoc = htmlDoc;
+}
+
+function renderReceiptIframe(iframeId, sectionTitle, periodLabel, rows, totalLabel, totalValue) {
+  _recFillIframe(document.getElementById(iframeId), _recBuildDoc(sectionTitle, periodLabel, rows, totalLabel, totalValue));
+}
+
+// ── Marchandise variant — category-grouped rows with a qty badge + unit
+//    price (name / ×qty / × unit-price / line-total) plus a per-category
+//    subtotal, matching legacy/app/marchandise.js:printMarchandiseDuJour()
+//    row for row (same classes, same 5-column grid, same inline badge
+//    sizing) — the real printed Marchandise ticket, not an approximation.
+const _RECEIPT_MARCH_EXTRA_STYLE = `
+  .rp-marchandise-table .r-item-row.r-item-detailed {
+    display:grid; grid-template-columns:30px 1fr 44px 1fr 82px; column-gap:5px;
+    align-items:center; margin:4px 0;
+  }
+  .rp-marchandise-table .r-item-qtybadge {
+    display:block; width:30px; min-width:30px; line-height:20px; text-align:center; padding:0;
+    background:#000; color:#fff; font-size:11px; font-weight:900; border-radius:5px;
+  }
+  /* white-space/text-overflow reset — the base .r-item-name (for the flat
+     Articles Vendus row shape) truncates with an ellipsis on one line;
+     legacy/styles/pos.css's real marchandise ticket instead wraps a long
+     name onto a second line (overflow-wrap:break-word), which needs
+     white-space:normal to actually take effect here. */
+  .rp-marchandise-table .r-item-name { font-size:11px; min-width:0; white-space:normal; overflow:visible; text-overflow:clip; overflow-wrap:break-word; color:#000; font-weight:bold; }
+  .rp-marchandise-table .r-item-variant { font-weight:normal; font-style:italic; font-size:10px; }
+  .rp-marchandise-table .r-item-unitprice { grid-column:3; min-width:0; text-align:center; font-size:10px; font-weight:600; color:#555; }
+  .rp-marchandise-table .r-item-price { grid-column:5; min-width:0; text-align:right; font-weight:900; color:#000; }
+  .rp-marchandise-table .marc-tot-mod { color:#c98a1c; font-weight:700; font-style:normal; }
+  .r-subtotal-row { display:flex; justify-content:space-between; font-size:11px; color:#000; font-weight:bold; margin:2px 0 8px; }
+`;
+
+// sections: [{ catLabel, catTotal (formatted), rows: [{name, variant, qty, unitPrice (formatted), lineTotal (formatted), mod}] }]
+function _recBuildMarchandiseDoc(periodLabel, sections, grandTotal, anyMod) {
+  const { bizName, logoSrc } = _recBizIdentity();
+
+  const sectionsHtml = sections.length ? sections.map(sec => `
+      <div class="r-section-title">— ${sec.catLabel} —</div>
+      ${sec.rows.map(r => `
+        <div class="r-item-row r-item-detailed">
+          <span class="r-item-qtybadge">${r.qty}</span>
+          <span class="r-item-name">${r.name}${r.variant ? ` <span class="r-item-variant">(${r.variant})</span>` : ''}</span>
+          <span class="r-item-unitprice${r.mod ? ' marc-tot-mod' : ''}">× ${r.unitPrice}</span>
+          <span class="r-item-price">${r.lineTotal} Dhs</span>
+        </div>`).join('')}
+      <div class="r-subtotal-row"><span>Sous total ${sec.catLabel}</span><span>${sec.catTotal} Dhs</span></div>
+    `).join('') : '<div class="r-meta">Aucun achat</div>';
+
+  return `<!doctype html><html><head>${_recHead(_RECEIPT_IFRAME_STYLE + _RECEIPT_MARCH_EXTRA_STYLE)}</head><body>
+    <div class="receipt-page">
+      ${logoSrc ? `<div class="r-logo-wrap"><img src="${logoSrc}"></div>` : ''}
+      <div class="r-brand">${bizName.toUpperCase()}</div>
+      <hr class="r-divider-solid">
+      <div class="r-section-title" style="font-size:13px;margin:8px 0 4px;font-weight:900;">ACHATS MARCHANDISE</div>
+      <div class="r-meta">${periodLabel}</div>
+      <div class="r-meta">Imprimé le ${_recPrintedAt()}</div>
+      <hr class="r-divider">
+      <div class="rp-marchandise-table">
+        ${sectionsHtml}
+      </div>
+      <hr class="r-divider-solid">
+      <div class="r-total-row"><span>TOTAL GÉNÉRAL</span><span>${grandTotal} Dhs</span></div>
+      ${anyMod ? '<div class="r-meta" style="font-size:9px;font-style:italic;font-weight:normal;">* prix du jour, différent du prix catalogue habituel</div>' : ''}
+      <div class="r-thank">— ERPGEN Stats —</div>
+    </div>
+  </body></html>`;
+}
+
+function renderMarchandiseReceiptIframe(iframeId, periodLabel, sections, grandTotal, anyMod) {
+  _recFillIframe(document.getElementById(iframeId), _recBuildMarchandiseDoc(periodLabel, sections, grandTotal, anyMod));
 }
 
 function printReceiptIframe(iframeId) {

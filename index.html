@@ -251,10 +251,17 @@
       <div class="kpi"><div class="kpi-label">Catégorie Vedette</div><div class="kpi-value" id="marc-kpi-cat">—</div><div class="kpi-sub" id="marc-kpi-cat-sub">—</div></div>
     </div>
     <div class="card" id="marc-card">
-      <div id="marc-table-wrap"></div>
-      <div class="marc-receipt-total">
-        <span>TOTAL GÉNÉRAL</span>
-        <span id="marc-day-total">—</span>
+      <div class="receipt-shell" id="marc-day-shell">
+        <iframe id="marc-day-frame" class="receipt-frame" title="Achats du jour" scrolling="no"></iframe>
+        <div class="receipt-tap-overlay" onclick="toggleReceiptControls('marc-day-shell')"></div>
+        <div class="receipt-toolbar-mini">
+          <button class="receipt-icon-btn" title="Imprimer" onclick="printReceiptIframe('marc-day-frame')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+          </button>
+          <button class="receipt-icon-btn" title="Partager" onclick="shareReceiptIframe('marc-day-frame', 'achats-marchandise-jour')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+          </button>
+        </div>
       </div>
     </div>
   </div>
@@ -290,8 +297,19 @@
       <div class="kpi"><div class="kpi-label">Jours Sans Achat</div><div class="kpi-value" id="marc-m-idle-days">—</div><div class="kpi-sub" id="marc-m-idle-days-sub">—</div></div>
     </div>
     <div class="card">
-      <div class="card-title">Achats du mois — par catégorie</div>
-      <div id="marc-m-cat-list" class="scroll-list"></div>
+      <div class="card-title">Achats du mois — par article</div>
+      <div class="receipt-shell" id="marc-m-shell">
+        <iframe id="marc-m-frame" class="receipt-frame" title="Achats du mois" scrolling="no"></iframe>
+        <div class="receipt-tap-overlay" onclick="toggleReceiptControls('marc-m-shell')"></div>
+        <div class="receipt-toolbar-mini">
+          <button class="receipt-icon-btn" title="Imprimer" onclick="printReceiptIframe('marc-m-frame')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+          </button>
+          <button class="receipt-icon-btn" title="Partager" onclick="shareReceiptIframe('marc-m-frame', 'achats-marchandise-mois')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+          </button>
+        </div>
+      </div>
     </div>
   </div>
 </div>

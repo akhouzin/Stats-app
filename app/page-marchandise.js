@@ -9,7 +9,10 @@
 // current catalog price (pu/pkg/pl). page-inventory.js stays loaded
 // (CONSUMABLES/MANUAL_KEYWORDS/fmtNum are still used by
 // page-barista.js/page-recette.js) — this file only replaces its PAGE, not
-// its data. Reuses page-inventory.js's toISODate()/_minvFmt() (loads earlier).
+// its data. Reuses page-inventory.js's toISODate() (loads earlier). Both the
+// day and month views render through receipt-export.js — real POS ticket
+// look (fonts, layout), Print/Share buttons — same treatment as
+// page-today.js/page-daily.js's "Articles Vendus" lists.
 
 let _pmcDayOffset = 0;
 let _pmcScope = 'day';        // 'day' | 'month' — top-level toggle, mirrors page-inventory.js's period-bar convention
@@ -43,19 +46,44 @@ function setMarchScope(scope) {
   if (scope === 'month') renderMarchMonth();
 }
 
+// One article's price-type breakdown for a day: up to 3 printed-style rows
+// (badge/name/unit-price/line-total) — same shape
+// legacy/app/marchandise.js:printMarchandiseDuJour()'s buildSection() emits,
+// tagging the type (Pu/Pkg/Lot) only when the article had more than one
+// that day. unitPrice is cost/qty (an effective average) rather than a
+// single achat row's price, since — unlike the POS's own print, which reads
+// one achat per article — this sums across every achat row for that
+// article/day, which could in principle mix a price override with the
+// catalog price.
+const _PMC_PRICE_TYPES = [{ key: 'pu', label: 'Pu' }, { key: 'pkg', label: 'Pkg' }, { key: 'pl', label: 'Lot' }];
+function _pmcBuildArtRows(art, q, onMod) {
+  const active = _PMC_PRICE_TYPES.filter(t => q[`qty_${t.key}`] > 0);
+  return active.map(t => {
+    const qty = q[`qty_${t.key}`];
+    const cost = q[`cost_${t.key}`];
+    const mod = q[`mod_${t.key}`];
+    if (mod) onMod();
+    return {
+      name: art.nom,
+      variant: active.length > 1 ? t.label : null,
+      qty,
+      unitPrice: fmtMoney(qty ? cost / qty : 0),
+      lineTotal: fmtMoney(cost),
+      mod,
+    };
+  });
+}
+
 function renderMarchandise() {
   const day = _pmcDateForOffset(_pmcDayOffset);
   const iso = toISODate(day);
+  const dayLabel = getDayKey(day);
 
-  document.getElementById('marc-day-label').textContent = getDayKey(day);
+  document.getElementById('marc-day-label').textContent = dayLabel;
   document.getElementById('marc-day-next').disabled = _pmcDayOffset >= 0;
 
-  const wrap = document.getElementById('marc-table-wrap');
-  const totalEl = document.getElementById('marc-day-total');
-
   if (_marcArticles.length === 0) {
-    wrap.innerHTML = '<div class="empty">Aucun article configuré dans Marchandise.</div>';
-    totalEl.textContent = fmtMoney(0);
+    renderMarchandiseReceiptIframe('marc-day-frame', dayLabel, [], fmtMoney(0), false);
     _pmcRenderKpis(0, 0, 0, null, 0);
     if (_pmcScope === 'month') renderMarchMonth();
     return;
@@ -63,8 +91,7 @@ function renderMarchandise() {
 
   const dayAchats = _marcAchats.filter(a => a.date === iso);
   if (dayAchats.length === 0) {
-    wrap.innerHTML = '<div class="empty">Aucun achat ce jour-là.</div>';
-    totalEl.textContent = fmtMoney(0);
+    renderMarchandiseReceiptIframe('marc-day-frame', dayLabel, [], fmtMoney(0), false);
     _pmcRenderKpis(0, 0, 0, null, 0);
     if (_pmcScope === 'month') renderMarchMonth();
     return;
@@ -73,17 +100,27 @@ function renderMarchandise() {
   const artMap = Object.fromEntries(_marcArticles.map(a => [a.id, a]));
   const catMap = Object.fromEntries(_marcCategories.map(c => [c.id, c]));
 
+  // Per-article, per-price-type aggregation across every achat row that day
+  // (an article can be bought as Pu AND Pkg the same day, and/or have more
+  // than one achat row of the same type).
   const byArticle = {};
   dayAchats.forEach(a => {
     const art = artMap[a.article_id];
     if (!art) return; // article since deleted in the POS
-    const cur = byArticle[a.article_id] || { qty_pu: 0, qty_pkg: 0, qty_pl: 0, cost: 0 };
-    cur.qty_pu  += a.qty_pu  || 0;
-    cur.qty_pkg += a.qty_pkg || 0;
-    cur.qty_pl  += a.qty_pl  || 0;
-    cur.cost += (a.qty_pu  || 0) * _pmcEffectivePrice(art, a, 'pu')
-              + (a.qty_pkg || 0) * _pmcEffectivePrice(art, a, 'pkg')
-              + (a.qty_pl  || 0) * _pmcEffectivePrice(art, a, 'pl');
+    const cur = byArticle[a.article_id] || {
+      qty_pu: 0, qty_pkg: 0, qty_pl: 0,
+      cost_pu: 0, cost_pkg: 0, cost_pl: 0,
+      mod_pu: false, mod_pkg: false, mod_pl: false,
+    };
+    cur.qty_pu   += a.qty_pu  || 0;
+    cur.cost_pu  += (a.qty_pu  || 0) * _pmcEffectivePrice(art, a, 'pu');
+    if (a.price_pu  != null) cur.mod_pu  = true;
+    cur.qty_pkg  += a.qty_pkg || 0;
+    cur.cost_pkg += (a.qty_pkg || 0) * _pmcEffectivePrice(art, a, 'pkg');
+    if (a.price_pkg != null) cur.mod_pkg = true;
+    cur.qty_pl   += a.qty_pl  || 0;
+    cur.cost_pl  += (a.qty_pl  || 0) * _pmcEffectivePrice(art, a, 'pl');
+    if (a.price_pl  != null) cur.mod_pl  = true;
     byArticle[a.article_id] = cur;
   });
 
@@ -94,46 +131,32 @@ function renderMarchandise() {
   Object.keys(byArticle).forEach(id => {
     const art = artMap[id];
     const q = byArticle[id];
-    dayTotal += q.cost;
-    const row = { art, q, cost: q.cost };
+    const artTotal = q.cost_pu + q.cost_pkg + q.cost_pl;
+    dayTotal += artTotal;
+    const row = { art, q, artTotal };
     const catKey = (art.cat_id && catMap[art.cat_id]) ? art.cat_id : '__nocat__';
-    catCost[catKey] = (catCost[catKey] || 0) + q.cost;
+    catCost[catKey] = (catCost[catKey] || 0) + artTotal;
     if (catKey === '__nocat__') nocat.push(row);
     else (groups[catKey] = groups[catKey] || []).push(row);
   });
 
-  const buildRow = ({ art, q, cost }) => {
-    const unit = art.unit_label || 'unité';
-    const parts = [];
-    if (q.qty_pu)  parts.push(`${_minvFmt(q.qty_pu)} ${unit}`);
-    if (q.qty_pkg) parts.push(`${_minvFmt(q.qty_pkg)} pkg`);
-    if (q.qty_pl)  parts.push(`${_minvFmt(q.qty_pl)} pl`);
-    return `
-      <div class="minv-row">
-        <div class="minv-row-main">
-          <div class="minv-name">${art.nom}<span class="minv-unit">${parts.join(', ')}</span></div>
-          <div class="minv-stats">
-            <div class="minv-stat"><span class="minv-stat-val">${fmtMoney(cost)}</span><span class="minv-stat-label">Coût</span></div>
-          </div>
-        </div>
-      </div>`;
-  };
+  let anyMod = false;
+  const onMod = () => { anyMod = true; };
+  const buildSection = (catLabel, rows) => ({
+    catLabel,
+    catTotal: fmtMoney(rows.reduce((s, r) => s + r.artTotal, 0)),
+    rows: rows.slice().sort((a, b) => a.art.nom.localeCompare(b.art.nom)).flatMap(r => _pmcBuildArtRows(r.art, r.q, onMod)),
+  });
 
   const sorted = [..._marcCategories].sort((a, b) => a.sort_order - b.sort_order);
-  let html = '';
+  const sections = [];
   sorted.forEach(cat => {
     const rows = groups[cat.id];
-    if (!rows || rows.length === 0) return;
-    html += `<div class="minv-cat-row">${cat.nom}</div>`;
-    rows.slice().sort((a, b) => a.art.nom.localeCompare(b.art.nom)).forEach(r => html += buildRow(r));
+    if (rows && rows.length > 0) sections.push(buildSection(cat.nom, rows));
   });
-  if (nocat.length > 0) {
-    html += `<div class="minv-cat-row">Sans catégorie</div>`;
-    nocat.slice().sort((a, b) => a.art.nom.localeCompare(b.art.nom)).forEach(r => html += buildRow(r));
-  }
+  if (nocat.length > 0) sections.push(buildSection('Sans catégorie', nocat));
 
-  wrap.innerHTML = html;
-  totalEl.textContent = fmtMoney(dayTotal);
+  renderMarchandiseReceiptIframe('marc-day-frame', dayLabel, sections, fmtMoney(dayTotal), anyMod);
 
   let topCatKey = null, topCatCost = -1;
   Object.keys(catCost).forEach(k => { if (catCost[k] > topCatCost) { topCatKey = k; topCatCost = catCost[k]; } });
@@ -225,8 +248,7 @@ function renderMarchMonth() {
   const monthStartIso = toISODate(monthDate);
   const nextMonthIso = toISODate(new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 1));
   const monthAchats = _marcAchats.filter(a => a.date >= monthStartIso && a.date < nextMonthIso);
-
-  const catListEl = document.getElementById('marc-m-cat-list');
+  const periodLabel = document.getElementById('marc-month-label').textContent;
 
   if (monthAchats.length === 0) {
     document.getElementById('marc-m-total').textContent = fmtMoney(0);
@@ -248,7 +270,7 @@ function renderMarchMonth() {
     document.getElementById('marc-m-avg-line').textContent = fmtMoney(0);
     document.getElementById('marc-m-idle-days').textContent = '—';
     document.getElementById('marc-m-idle-days-sub').textContent = '—';
-    catListEl.innerHTML = '<div class="empty">Aucun achat ce mois-ci.</div>';
+    renderReceiptIframe('marc-m-frame', 'ACHATS PAR ARTICLE', periodLabel, [], 'TOTAL', fmtMoney(0));
     setMarchMonthView(_pmcMonthView);
     return;
   }
@@ -315,49 +337,19 @@ function renderMarchMonth() {
   document.getElementById('marc-m-idle-days').textContent = Math.max(0, daysElapsed - activeDays);
   document.getElementById('marc-m-idle-days-sub').textContent = `sur ${daysElapsed} jours`;
 
-  // Category-grouped, per-article breakdown — same row shape as the day view's
-  // buildRow() (.minv-row/.minv-name/.minv-unit/.minv-stats), so each article shows
-  // how many separate purchases it had this month (artCount) plus both its cost and
-  // its share of the month's total (artCost / total), grouped under category headers
-  // sorted the same way the day list is (catCategories.sort_order, "Sans catégorie" last).
-  const artIdsByCat = {};
-  const artIdsNocat = [];
-  Object.keys(artCost).forEach(id => {
-    const art = artMap[id];
-    if (!art) return;
-    const catKey = (art.cat_id && catMap[art.cat_id]) ? art.cat_id : null;
-    if (catKey) (artIdsByCat[catKey] = artIdsByCat[catKey] || []).push(id);
-    else artIdsNocat.push(id);
-  });
-  const buildMonthArtRow = (id) => {
-    const art = artMap[id];
-    const cost = artCost[id];
-    const count = artCount[id];
-    const pct = (cost / total * 100).toFixed(0);
-    return `
-      <div class="minv-row">
-        <div class="minv-row-main">
-          <div class="minv-name">${art.nom}<span class="minv-unit">×${count} achat${count > 1 ? 's' : ''}</span></div>
-          <div class="minv-stats">
-            <div class="minv-stat"><span class="minv-stat-val">${pct}%</span><span class="minv-stat-label">Part</span></div>
-            <div class="minv-stat"><span class="minv-stat-val">${fmtMoney(cost)}</span><span class="minv-stat-label">Coût</span></div>
-          </div>
-        </div>
-      </div>`;
-  };
-  const catSorted = [..._marcCategories].sort((a, b) => a.sort_order - b.sort_order);
-  let listHtml = '';
-  catSorted.forEach(cat => {
-    const ids = artIdsByCat[cat.id];
-    if (!ids || ids.length === 0) return;
-    listHtml += `<div class="minv-cat-row">${cat.nom}</div>`;
-    ids.slice().sort((a, b) => artCost[b] - artCost[a]).forEach(id => listHtml += buildMonthArtRow(id));
-  });
-  if (artIdsNocat.length > 0) {
-    listHtml += `<div class="minv-cat-row">Sans catégorie</div>`;
-    artIdsNocat.slice().sort((a, b) => artCost[b] - artCost[a]).forEach(id => listHtml += buildMonthArtRow(id));
-  }
-  catListEl.innerHTML = listHtml;
+  // Per-article breakdown (all categories flattened, ranked by cost) —
+  // rendered as a real POS-ticket-styled receipt (receipt-export.js), same
+  // treatment as page-daily.js's "Articles vendus — ce mois". qty here is
+  // how many separate times the article was bought this month (artCount),
+  // not a summed quantity — the Catégorie/Article Vedette KPI tiles above
+  // already surface the category angle, so this list stays a flat ranking
+  // rather than duplicating category subtotals.
+  const rankedArtIds = Object.keys(artCost).filter(id => artMap[id]).sort((a, b) => artCost[b] - artCost[a]);
+  renderReceiptIframe(
+    'marc-m-frame', 'ACHATS PAR ARTICLE', periodLabel,
+    rankedArtIds.map(id => ({ name: artMap[id].nom, qty: artCount[id], amount: fmtMoney(artCost[id]) })),
+    'TOTAL', fmtMoney(total)
+  );
 
   setMarchMonthView(_pmcMonthView);
 }
