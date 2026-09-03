@@ -1,17 +1,12 @@
 // ═══════════════════════════════════════
 // RECEIPT EXPORT — renders an "Articles vendus" list inside an <iframe>
-// styled to match EXACTLY the ticket the POS itself prints/sends to
-// Telegram: legacy/styles/pos.css's real `.r-item-name`(flex:1) /
-// `.r-item-qty`(min-width:30px, centered) / `.r-item-price`(min-width:60px,
-// right) column rules, copied verbatim (not approximated) so the qty column
-// sits centered the same way it does on a real ticket. The iframe itself
-// sits in a black frame (.receipt-shell, in stats.css) with small icon-only
-// Print/Share buttons across its top, mirroring a PDF viewer's toolbar
-// rather than this page's other (large, labeled) buttons — see
-// legacy/app/telegram.js's own black photo-viewer-style Telegram delivery
-// for the visual reference. The ticket itself has no card styling (shadow/
-// max-width/centering) of its own — it fills the iframe edge to edge, only
-// the outer black shell provides the "frame".
+// styled like the ticket the POS itself prints/sends to Telegram. Sits in a
+// thin, sharp-edged black frame (.receipt-shell, in stats.css) — narrower
+// than the surrounding card, like a photo thumbnail, not stretched full
+// width. Print/Share are small circular icon buttons (inline SVG, not
+// emoji) overlaid on the ticket, hidden until the ticket itself is tapped
+// (toggleReceiptControls() below) — a lightbox/photo-viewer convention,
+// deliberately not styled like this page's other (large, labeled) buttons.
 //
 // Share uses html2canvas (same library legacy/app/telegram.js uses to
 // screenshot a receipt before posting it) to turn the iframe's receipt into
@@ -24,9 +19,18 @@
 //
 // The iframe gets its own embedded <style> (srcdoc creates a fully separate
 // document — it does NOT inherit stats.css), so only the outer chrome
-// (.receipt-shell/.receipt-toolbar-mini/.receipt-icon-btn/.receipt-frame)
-// lives in stats.css.
+// (.receipt-shell/.receipt-tap-overlay/.receipt-toolbar-mini/
+// .receipt-icon-btn/.receipt-frame) lives in stats.css.
 // ═══════════════════════════════════════
+
+// Tap-to-reveal — the ticket itself has no interactive content, so a
+// full-size overlay (see .receipt-tap-overlay in stats.css) captures the
+// tap in the PARENT document (a click inside the iframe's own document
+// wouldn't bubble out to here) and toggles the toolbar's visibility.
+function toggleReceiptControls(shellId) {
+  const shell = document.getElementById(shellId);
+  if (shell) shell.classList.toggle('controls-visible');
+}
 
 const _RECEIPT_IFRAME_STYLE = `
   * { box-sizing: border-box; }
@@ -39,12 +43,15 @@ const _RECEIPT_IFRAME_STYLE = `
   .r-divider-solid { border:none; border-top:2px solid #000; margin:8px 0; }
   .r-meta { font-size:10px; color:#000; text-align:center; margin:2px 0; font-weight:bold; }
   .r-section-title { font-size:11px; letter-spacing:2px; text-transform:uppercase; font-weight:900; text-align:center; margin:4px 0; color:#000; }
-  /* Verbatim from legacy/styles/pos.css's .r-item-row/.r-item-name/.r-item-qty/.r-item-price
-     (the plain "Articles vendus" report row shape, not the client-receipt .r-item-detailed one). */
-  .r-item-row { display:flex; justify-content:space-between; align-items:baseline; gap:4px; margin:4px 0; font-size:12px; font-weight:bold; color:#000; }
-  .r-item-name { flex:1; min-width:0; color:#000; font-weight:bold; }
-  .r-item-qty { min-width:30px; text-align:center; font-size:11px; color:#000; font-weight:bold; }
-  .r-item-price { min-width:60px; text-align:right; font-weight:900; color:#000; }
+  /* A flex row with a flex:1 name column leaves the qty hugging the price on
+     the right, not sitting in the visual middle of the row — a fixed-track
+     CSS Grid (name | qty | price, qty's own middle track) is what actually
+     centers it regardless of name length. Same convention as Stats' own
+     .ticket-item-row elsewhere in stats.css. */
+  .r-item-row { display:grid; grid-template-columns:1fr 44px 1fr; align-items:baseline; gap:6px; margin:4px 0; font-size:12px; font-weight:bold; color:#000; }
+  .r-item-name { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#000; font-weight:bold; }
+  .r-item-qty { text-align:center; font-size:11px; color:#000; font-weight:bold; }
+  .r-item-price { text-align:right; font-weight:900; color:#000; }
   .r-total-row { display:flex; justify-content:space-between; font-size:15px; font-weight:900; color:#000; margin:6px 0; }
   .r-thank { font-size:11px; text-align:center; color:#000; font-weight:bold; margin:6px 0 0; }
 `;
