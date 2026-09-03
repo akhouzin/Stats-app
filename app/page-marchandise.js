@@ -191,22 +191,26 @@ function _pmcAchatCost(art, achat) {
        + (achat.qty_pl  || 0) * _pmcEffectivePrice(art, achat, 'pl');
 }
 
-// Aggregates a set of achats into total cost + per-category + per-article cost maps.
-// Categoryless articles are bucketed under '__nocat__' (mirrors the day view's `nocat` list).
+// Aggregates a set of achats into total cost + per-category + per-article cost/count maps.
+// artCount is how many separate purchase entries (achat rows) exist for that article —
+// "how many times it was bought", not the summed quantity. Categoryless articles are
+// bucketed under '__nocat__' (mirrors the day view's `nocat` list).
 function _pmcAggregate(achats, artMap, catMap) {
   let total = 0;
   const catCost = {};
   const artCost = {};
+  const artCount = {};
   achats.forEach(a => {
     const art = artMap[a.article_id];
     if (!art) return; // article since deleted in the POS
     const cost = _pmcAchatCost(art, a);
     total += cost;
     artCost[a.article_id] = (artCost[a.article_id] || 0) + cost;
+    artCount[a.article_id] = (artCount[a.article_id] || 0) + 1;
     const catKey = (art.cat_id && catMap[art.cat_id]) ? art.cat_id : '__nocat__';
     catCost[catKey] = (catCost[catKey] || 0) + cost;
   });
-  return { total, catCost, artCost };
+  return { total, catCost, artCost, artCount };
 }
 
 function renderMarchMonth() {
@@ -249,7 +253,7 @@ function renderMarchMonth() {
     return;
   }
 
-  const { total, catCost, artCost } = _pmcAggregate(monthAchats, artMap, catMap);
+  const { total, catCost, artCost, artCount } = _pmcAggregate(monthAchats, artMap, catMap);
   const activeDays = new Set(monthAchats.map(a => a.date)).size;
   const daysInMonth = new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 0).getDate();
   const isCurrentMonth = _pmcMonthOffset === 0;
@@ -311,18 +315,49 @@ function renderMarchMonth() {
   document.getElementById('marc-m-idle-days').textContent = Math.max(0, daysElapsed - activeDays);
   document.getElementById('marc-m-idle-days-sub').textContent = `sur ${daysElapsed} jours`;
 
-  // Category breakdown list — printed-ticket row shape (see marc-receipt-total's
-  // convention), reused here for name/share/cost instead of name/qty/price.
-  catListEl.innerHTML = rankedCats.map(([key, cost]) => {
-    const name = key === '__nocat__' ? 'Sans catégorie' : catMap[key].nom;
+  // Category-grouped, per-article breakdown — same row shape as the day view's
+  // buildRow() (.minv-row/.minv-name/.minv-unit/.minv-stats), so each article shows
+  // how many separate purchases it had this month (artCount) plus both its cost and
+  // its share of the month's total (artCost / total), grouped under category headers
+  // sorted the same way the day list is (catCategories.sort_order, "Sans catégorie" last).
+  const artIdsByCat = {};
+  const artIdsNocat = [];
+  Object.keys(artCost).forEach(id => {
+    const art = artMap[id];
+    if (!art) return;
+    const catKey = (art.cat_id && catMap[art.cat_id]) ? art.cat_id : null;
+    if (catKey) (artIdsByCat[catKey] = artIdsByCat[catKey] || []).push(id);
+    else artIdsNocat.push(id);
+  });
+  const buildMonthArtRow = (id) => {
+    const art = artMap[id];
+    const cost = artCost[id];
+    const count = artCount[id];
     const pct = (cost / total * 100).toFixed(0);
     return `
-      <div class="ticket-item-row">
-        <span class="ticket-item-name">${name}</span>
-        <span class="ticket-item-qty">${pct}%</span>
-        <span class="ticket-item-price">${fmtMoney(cost)} Dhs</span>
+      <div class="minv-row">
+        <div class="minv-row-main">
+          <div class="minv-name">${art.nom}<span class="minv-unit">×${count} achat${count > 1 ? 's' : ''}</span></div>
+          <div class="minv-stats">
+            <div class="minv-stat"><span class="minv-stat-val">${pct}%</span><span class="minv-stat-label">Part</span></div>
+            <div class="minv-stat"><span class="minv-stat-val">${fmtMoney(cost)}</span><span class="minv-stat-label">Coût</span></div>
+          </div>
+        </div>
       </div>`;
-  }).join('');
+  };
+  const catSorted = [..._marcCategories].sort((a, b) => a.sort_order - b.sort_order);
+  let listHtml = '';
+  catSorted.forEach(cat => {
+    const ids = artIdsByCat[cat.id];
+    if (!ids || ids.length === 0) return;
+    listHtml += `<div class="minv-cat-row">${cat.nom}</div>`;
+    ids.slice().sort((a, b) => artCost[b] - artCost[a]).forEach(id => listHtml += buildMonthArtRow(id));
+  });
+  if (artIdsNocat.length > 0) {
+    listHtml += `<div class="minv-cat-row">Sans catégorie</div>`;
+    artIdsNocat.slice().sort((a, b) => artCost[b] - artCost[a]).forEach(id => listHtml += buildMonthArtRow(id));
+  }
+  catListEl.innerHTML = listHtml;
 
   setMarchMonthView(_pmcMonthView);
 }
