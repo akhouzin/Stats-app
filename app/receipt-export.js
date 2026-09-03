@@ -35,7 +35,7 @@ function toggleReceiptControls(shellId) {
 const _RECEIPT_IFRAME_STYLE = `
   * { box-sizing: border-box; }
   html, body { margin:0; }
-  body { padding:10px 0 6px; background:#fff; font-family:'Courier New',Courier,monospace; color:#000; }
+  body { padding:10px 0 2px; background:#fff; font-family:'Courier New',Courier,monospace; color:#000; }
   .r-logo-wrap { text-align:center; margin-bottom:6px; }
   .r-logo-wrap img { max-width:120px; max-height:48px; object-fit:contain; }
   .r-brand { font-family:'Cinzel Decorative','Cinzel',serif; font-size:17px; font-weight:700; letter-spacing:4px; text-align:center; color:#000; display:block; margin:2px 0; }
@@ -96,7 +96,7 @@ function renderReceiptIframe(iframeId, sectionTitle, periodLabel, rows, totalLab
   const iframe = document.getElementById(iframeId);
   if (!iframe) return;
   iframe.onload = () => {
-    try { iframe.style.height = (iframe.contentDocument.body.scrollHeight + 4) + 'px'; } catch (e) {}
+    try { iframe.style.height = iframe.contentDocument.body.scrollHeight + 'px'; } catch (e) {}
   };
   iframe.srcdoc = _recBuildDoc(sectionTitle, periodLabel, rows, totalLabel, totalValue);
 }

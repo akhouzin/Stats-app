@@ -211,22 +211,19 @@
   .minv-link-chip { display:inline-flex; align-items:center; background:#eef4ee; color:var(--green-dark); border-radius:12px; padding:3px 9px; font-size:11px; white-space:nowrap; line-height:1.4; }
   .minv-link-none { color:var(--text-dim); font-size:12px; }
 
-  /* RECEIPT EXPORT — a thin, sharp-edged black frame around the ticket, like
-     a photo mat — full width of its container (no max-width: that left
-     visible blank space on the sides, which is not what "thinner" meant;
-     "thin" refers to the frame's own border thickness, not the component's
-     overall width). Print/Share are small circular icon buttons overlaid on
-     the ticket, hidden until tapped (.receipt-tap-overlay captures the tap —
+  /* RECEIPT EXPORT — plain (unframed) ticket, full width of its container.
+     .receipt-shell carries no visual styling of its own — it's only a
+     position:relative anchor for the tap-to-reveal overlay/toolbar below.
+     Print/Share are small circular icon buttons overlaid on the ticket,
+     hidden until tapped (.receipt-tap-overlay captures the tap —
      receipt-export.js:toggleReceiptControls() — since a click inside the
      iframe's own document can't bubble out to a parent-page listener). The
      iframe's own printed-ticket styling (.receipt-page/.r-*) lives inside
      receipt-export.js's srcdoc, not here — an iframe document doesn't
      inherit this stylesheet. */
-  .receipt-shell {
-    position:relative; background:#000; padding:3px; width:100%;
-  }
+  .receipt-shell { position:relative; width:100%; }
   .receipt-frame { display:block; width:100%; border:none; background:#fff; }
-  .receipt-tap-overlay { position:absolute; inset:3px; z-index:1; cursor:pointer; }
+  .receipt-tap-overlay { position:absolute; inset:0; z-index:1; cursor:pointer; }
   .receipt-toolbar-mini {
     position:absolute; top:9px; right:9px; z-index:2;
     display:flex; gap:6px;
