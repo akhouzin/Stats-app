@@ -75,11 +75,13 @@
       </div>
       <div id="t-recent" class="scroll-list"></div>
       <div id="t-articles" class="scroll-list" style="display:none;">
-        <div class="receipt-toolbar">
-          <button class="receipt-btn" onclick="printReceiptIframe('t-articles-frame')">🖨 Imprimer</button>
-          <button class="receipt-btn" onclick="shareReceiptIframe('t-articles-frame', 'articles-vendus-jour')">📤 Partager</button>
+        <div class="receipt-shell">
+          <div class="receipt-toolbar-mini">
+            <button class="receipt-icon-btn" title="Imprimer" onclick="printReceiptIframe('t-articles-frame')">🖨</button>
+            <button class="receipt-icon-btn" title="Partager" onclick="shareReceiptIframe('t-articles-frame', 'articles-vendus-jour')">📤</button>
+          </div>
+          <iframe id="t-articles-frame" class="receipt-frame" title="Articles vendus du jour" scrolling="no"></iframe>
         </div>
-        <iframe id="t-articles-frame" class="receipt-frame" title="Articles vendus du jour"></iframe>
       </div>
     </div>
     <div class="card">
@@ -127,12 +129,14 @@
       </div>
       <div class="card">
         <div class="card-title">Articles vendus — ce mois</div>
-        <div class="receipt-toolbar">
-          <button class="receipt-btn" onclick="printReceiptIframe('r-items-frame')">🖨 Imprimer</button>
-          <button class="receipt-btn" onclick="shareReceiptIframe('r-items-frame', 'articles-vendus-mois')">📤 Partager</button>
-        </div>
         <div id="r-items" class="scroll-list">
-          <iframe id="r-items-frame" class="receipt-frame" title="Articles vendus du mois"></iframe>
+          <div class="receipt-shell">
+            <div class="receipt-toolbar-mini">
+              <button class="receipt-icon-btn" title="Imprimer" onclick="printReceiptIframe('r-items-frame')">🖨</button>
+              <button class="receipt-icon-btn" title="Partager" onclick="shareReceiptIframe('r-items-frame', 'articles-vendus-mois')">📤</button>
+            </div>
+            <iframe id="r-items-frame" class="receipt-frame" title="Articles vendus du mois" scrolling="no"></iframe>
+          </div>
         </div>
       </div>
       <div class="card">

@@ -211,22 +211,24 @@
   .minv-link-chip { display:inline-flex; align-items:center; background:#eef4ee; color:var(--green-dark); border-radius:12px; padding:3px 9px; font-size:11px; white-space:nowrap; line-height:1.4; }
   .minv-link-none { color:var(--text-dim); font-size:12px; }
 
-  /* RECEIPT EXPORT — parent-page chrome around a receipt-export.js iframe.
-     The iframe's own printed-ticket styling (.receipt-page/.r-*) lives inside
-     receipt-export.js's srcdoc, not here — an iframe document doesn't inherit
-     this stylesheet. */
-  .receipt-toolbar { display:flex; gap:8px; margin-bottom:10px; }
-  .receipt-btn {
-    flex:1; padding:8px 4px; border:1px solid var(--border); border-radius:8px;
-    background:var(--card); font-family:'Cinzel',serif; font-size:10px;
-    letter-spacing:1px; color:var(--green-dark); cursor:pointer; transition:all 0.15s;
+  /* RECEIPT EXPORT — a black frame (like a photo viewer) holding a small
+     icon-only Print/Share toolbar across its top and the receipt iframe
+     directly below, edge to edge — no card styling (shadow/rounding/
+     centering) on the ticket itself, only the shell around it. The iframe's
+     own printed-ticket styling (.receipt-page/.r-*) lives inside
+     receipt-export.js's srcdoc, not here — an iframe document doesn't
+     inherit this stylesheet. */
+  .receipt-shell { background:#000; border-radius:10px; overflow:hidden; }
+  .receipt-toolbar-mini { display:flex; justify-content:flex-end; gap:6px; padding:6px 8px; }
+  .receipt-icon-btn {
+    width:28px; height:28px; border-radius:6px; border:none;
+    background:rgba(255,255,255,0.14); color:#fff; font-size:13px;
+    cursor:pointer; display:flex; align-items:center; justify-content:center;
+    transition:background 0.15s; -webkit-tap-highlight-color:transparent;
   }
-  .receipt-btn:hover { background:var(--green-mid); }
-  .receipt-btn:active { transform:scale(0.98); }
-  .receipt-frame {
-    display:block; width:100%; max-width:320px; margin:0 auto; border:none;
-    border-radius:4px; box-shadow:0 2px 10px rgba(0,0,0,0.18); background:#fff;
-  }
+  .receipt-icon-btn:hover { background:rgba(255,255,255,0.26); }
+  .receipt-icon-btn:active { transform:scale(0.92); }
+  .receipt-frame { display:block; width:100%; border:none; background:#fff; }
 
   /* MARCHANDISE */
   /* Mirrors legacy/app/marchandise.js's printed receipt total row
