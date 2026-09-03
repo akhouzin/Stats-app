@@ -134,17 +134,29 @@ function _recBuildDoc(sectionTitle, periodLabel, rows, totalLabel, totalValue) {
 // later layout change instead of guessing at timing.
 function _recFillIframe(iframe, htmlDoc) {
   if (!iframe) return;
-  iframe.onload = () => {
-    try {
-      const body = iframe.contentDocument.body;
-      const sync = () => { iframe.style.height = body.scrollHeight + 'px'; };
-      sync();
-      if (iframe._recHeightObserver) iframe._recHeightObserver.disconnect();
-      const ro = new ResizeObserver(sync);
-      ro.observe(body);
-      iframe._recHeightObserver = ro;
-    } catch (e) {}
-  };
+  // _recLoadPromise resolves once THIS srcdoc has actually finished loading
+  // (a real navigation — its <link rel=stylesheet> included, per the load
+  // event's own spec) — printReceiptIframe()/shareReceiptIframe() await it
+  // before touching contentDocument at all. Without this, a fast tap on the
+  // (always-visible, not gated by iframe.onload) tap-to-reveal overlay could
+  // fire Print/Share while contentDocument is still the previous — or even
+  // the initial about:blank — document, in which case fonts.ready resolves
+  // instantly with nothing queued to wait for, not because the font is
+  // ready but because the real document hasn't started loading it yet.
+  iframe._recLoadPromise = new Promise(resolve => {
+    iframe.onload = () => {
+      try {
+        const body = iframe.contentDocument.body;
+        const sync = () => { iframe.style.height = body.scrollHeight + 'px'; };
+        sync();
+        if (iframe._recHeightObserver) iframe._recHeightObserver.disconnect();
+        const ro = new ResizeObserver(sync);
+        ro.observe(body);
+        iframe._recHeightObserver = ro;
+      } catch (e) {}
+      resolve();
+    };
+  });
   iframe.srcdoc = htmlDoc;
 }
 
@@ -223,15 +235,32 @@ function renderMarchandiseReceiptIframe(iframeId, periodLabel, sections, grandTo
   _recFillIframe(document.getElementById(iframeId), _recBuildMarchandiseDoc(periodLabel, sections, grandTotal, anyMod));
 }
 
-// Both Print and Share fire the instant the user taps the button, which can
-// land before the iframe's own Google Fonts <link> has actually finished
-// downloading (a real race, not hypothetical — the on-screen iframe reflows
-// once the font lands and looks right eventually, but a print/capture taken
-// before that uses whatever fallback font was showing at that moment,
-// producing output that doesn't match the app). Awaiting the iframe's own
-// document.fonts.ready guarantees the real font is in before either runs.
+// Both Print and Share fire the instant the user taps the button, which —
+// since the tap-to-reveal overlay is visible from the moment the page
+// loads, not gated by the iframe's own load — can land before the iframe's
+// srcdoc has even finished navigating, let alone before its Google Fonts
+// <link> has downloaded. Three steps, in order, each closing a gap the
+// previous one doesn't cover:
+//   1. iframe._recLoadPromise — waits for the srcdoc's own load event (its
+//      <link rel=stylesheet> included), so contentDocument is guaranteed to
+//      be the real receipt document, not a stale/blank one. Skipping this
+//      is why checking fonts.ready alone wasn't enough: on a document that
+//      hasn't loaded yet, fonts.ready can resolve immediately with nothing
+//      queued to wait for.
+//   2. document.fonts.load(...) — explicitly requests the exact face the
+//      ticket uses (rather than hoping layout already triggered the fetch),
+//      and actually awaits the network fetch completing.
+//   3. document.fonts.ready — final settle once queued loads resolve.
 async function _recAwaitFonts(iframe) {
-  try { await iframe.contentDocument.fonts.ready; } catch (e) {}
+  if (iframe._recLoadPromise) { try { await iframe._recLoadPromise; } catch (e) {} }
+  try {
+    const fonts = iframe.contentDocument.fonts;
+    await Promise.all([
+      fonts.load('700 17px "Cinzel Decorative"'),
+      fonts.load('900 11px "Cinzel Decorative"'),
+    ]);
+    await fonts.ready;
+  } catch (e) {}
 }
 
 async function printReceiptIframe(iframeId) {
