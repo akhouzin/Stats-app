@@ -35,7 +35,12 @@ function toggleReceiptControls(shellId) {
 const _RECEIPT_IFRAME_STYLE = `
   * { box-sizing: border-box; }
   html, body { margin:0; }
-  body { padding:10px 0 2px; background:#fff; font-family:'Courier New',Courier,monospace; color:#000; }
+  /* @page controls the PRINTED page's own margin — browsers otherwise apply
+     their own default (often ~12.7mm), which body padding alone can't
+     override for contentWindow.print(). Kept modest so the ticket still
+     reads as "full width", not stretched to a full A4/Letter sheet. */
+  @page { margin: 6mm; }
+  body { padding:10px 14px 4px; background:#fff; font-family:'Courier New',Courier,monospace; color:#000; }
   .r-logo-wrap { text-align:center; margin-bottom:6px; }
   .r-logo-wrap img { max-width:120px; max-height:48px; object-fit:contain; }
   .r-brand { font-family:'Cinzel Decorative','Cinzel',serif; font-size:17px; font-weight:700; letter-spacing:4px; text-align:center; color:#000; display:block; margin:2px 0; }
@@ -90,13 +95,26 @@ function _recBuildDoc(sectionTitle, periodLabel, rows, totalLabel, totalValue) {
   </body></html>`;
 }
 
-// Fills the iframe and auto-sizes its height to the rendered content — an
-// iframe has no natural height of its own otherwise.
+// Fills the iframe and keeps its height continuously synced to the rendered
+// content — an iframe has no natural height of its own otherwise. A single
+// onload-time measurement isn't enough: the business logo (an <img> with no
+// intrinsic size reserved) can still be loading when onload fires, so a
+// one-shot scrollHeight read can under-measure and leave stale blank space
+// once the image lands. A ResizeObserver on the iframe's own body reacts to
+// that (and any other) later layout change instead of guessing at timing.
 function renderReceiptIframe(iframeId, sectionTitle, periodLabel, rows, totalLabel, totalValue) {
   const iframe = document.getElementById(iframeId);
   if (!iframe) return;
   iframe.onload = () => {
-    try { iframe.style.height = iframe.contentDocument.body.scrollHeight + 'px'; } catch (e) {}
+    try {
+      const body = iframe.contentDocument.body;
+      const sync = () => { iframe.style.height = body.scrollHeight + 'px'; };
+      sync();
+      if (iframe._recHeightObserver) iframe._recHeightObserver.disconnect();
+      const ro = new ResizeObserver(sync);
+      ro.observe(body);
+      iframe._recHeightObserver = ro;
+    } catch (e) {}
   };
   iframe.srcdoc = _recBuildDoc(sectionTitle, periodLabel, rows, totalLabel, totalValue);
 }
@@ -111,7 +129,13 @@ function printReceiptIframe(iframeId) {
 async function shareReceiptIframe(iframeId, fileName) {
   const iframe = document.getElementById(iframeId);
   if (!iframe || !iframe.contentDocument || typeof html2canvas === 'undefined') return;
-  const target = iframe.contentDocument.querySelector('.receipt-page');
+  // Capture <body>, not .receipt-page — the side/top margin around the
+  // ticket is body's own padding; .receipt-page has none of its own, so
+  // screenshotting it directly always came out edge-to-edge no matter what
+  // body's padding was set to, unlike the on-screen iframe (which shows
+  // body+page together) and the printed page (which prints the whole
+  // document, body padding included).
+  const target = iframe.contentDocument.body;
   if (!target) return;
   const canvas = await html2canvas(target, { scale: 2, backgroundColor: '#ffffff' });
   canvas.toBlob(async blob => {
