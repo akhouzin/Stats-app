@@ -75,14 +75,12 @@ function renderToday() {
     if (mi) articleMap[i.name].revenue += i.qty * mi.price;
   }));
   const articleEntries = Object.entries(articleMap).sort((a, b) => b[1].qty - a[1].qty);
-  document.getElementById('t-articles').innerHTML = articleEntries.length
-    ? articleEntries.map(([name, d]) => `
-        <div class="ticket-item-row">
-          <span class="ticket-item-name">${name}</span>
-          <span class="ticket-item-qty">×${d.qty}</span>
-          <span class="ticket-item-price">${fmtMoney(d.revenue)} Dhs</span>
-        </div>`).join('')
-    : emptyMsg;
+  const articlesTotal = articleEntries.reduce((s, [, d]) => s + d.revenue, 0);
+  renderReceiptIframe(
+    't-articles-frame', 'ARTICLES VENDUS', dayLabel,
+    articleEntries.map(([name, d]) => ({ name, qty: d.qty, amount: fmtMoney(d.revenue) })),
+    'TOTAL', fmtMoney(articlesTotal)
+  );
 
   setTodayViewMode(_todayViewMode);
 

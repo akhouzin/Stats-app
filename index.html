@@ -10,6 +10,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400;1,600&family=Cinzel:wght@400;600;700&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
 <title>ERPGEN — Stats</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 <link rel="stylesheet" href="./styles/stats.css">
 </head>
 <body>
@@ -73,7 +74,13 @@
         <button class="inv-period-btn" id="t-view-btn-articles" onclick="setTodayViewMode('articles')">Articles Vendus</button>
       </div>
       <div id="t-recent" class="scroll-list"></div>
-      <div id="t-articles" class="scroll-list" style="display:none;"></div>
+      <div id="t-articles" class="scroll-list" style="display:none;">
+        <div class="receipt-toolbar">
+          <button class="receipt-btn" onclick="printReceiptIframe('t-articles-frame')">🖨 Imprimer</button>
+          <button class="receipt-btn" onclick="shareReceiptIframe('t-articles-frame', 'articles-vendus-jour')">📤 Partager</button>
+        </div>
+        <iframe id="t-articles-frame" class="receipt-frame" title="Articles vendus du jour"></iframe>
+      </div>
     </div>
     <div class="card">
       <div class="card-title">Par Serveur — <span id="t-servers-title">Aujourd'hui</span></div>
@@ -120,7 +127,13 @@
       </div>
       <div class="card">
         <div class="card-title">Articles vendus — ce mois</div>
-        <div id="r-items" class="scroll-list"></div>
+        <div class="receipt-toolbar">
+          <button class="receipt-btn" onclick="printReceiptIframe('r-items-frame')">🖨 Imprimer</button>
+          <button class="receipt-btn" onclick="shareReceiptIframe('r-items-frame', 'articles-vendus-mois')">📤 Partager</button>
+        </div>
+        <div id="r-items" class="scroll-list">
+          <iframe id="r-items-frame" class="receipt-frame" title="Articles vendus du mois"></iframe>
+        </div>
       </div>
       <div class="card">
         <div class="card-title">Consommation — ce mois</div>
@@ -349,6 +362,7 @@
 <script src="./app/branding.js"></script>
 <script src="./app/state.js"></script>
 <script src="./app/helpers.js"></script>
+<script src="./app/receipt-export.js"></script>
 <script src="./app/data-loader.js"></script>
 <script src="./app/page-nav.js"></script>
 <script src="./app/page-today.js"></script>

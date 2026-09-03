@@ -52,7 +52,7 @@ function renderRapport() {
     document.getElementById('r-top-category-amount').textContent = '—';
     document.getElementById('r-avg-item-price').textContent = '0.00';
     document.getElementById('r-multi-item-pct').textContent = '0%';
-    document.getElementById('r-items').innerHTML = '<div class="empty">Aucune commande ce mois</div>';
+    renderReceiptIframe('r-items-frame', 'ARTICLES VENDUS', document.getElementById('r-month-label').textContent, [], 'TOTAL', fmtMoney(0));
     document.getElementById('r-consumption').innerHTML = '';
     setRapportViewMode(_rapportViewMode);
     return;
@@ -137,12 +137,11 @@ function renderRapport() {
   setRapportViewMode(_rapportViewMode);
 
   // Items
-  document.getElementById('r-items').innerHTML = sortedItems.map(([name, d]) => `
-      <div class="ticket-item-row">
-        <span class="ticket-item-name">${name}</span>
-        <span class="ticket-item-qty">×${d.qty}</span>
-        <span class="ticket-item-price">${fmtMoney(d.rev)} Dhs</span>
-      </div>`).join('');
+  renderReceiptIframe(
+    'r-items-frame', 'ARTICLES VENDUS', document.getElementById('r-month-label').textContent,
+    sortedItems.map(([name, d]) => ({ name, qty: d.qty, amount: fmtMoney(d.rev) })),
+    'TOTAL', fmtMoney(total)
+  );
 
   // Consumption
   const { water, water50, oulmes, oulmesFr, sodas, coffeeG, milkCl, theG, sucreTHe, sucreCafe } = calcConsumption(orders);
