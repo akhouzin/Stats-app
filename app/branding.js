@@ -27,6 +27,14 @@ const _STATS_DEFAULT_BRANDING = {
 let _statsDayCycleStartHour = 0;
 function getStatsDayCycleStartHour() { return _statsDayCycleStartHour; }
 
+// Connected POS's configured brand font (cp_theme_brand_font — same value
+// applyStatsBranding() below already applies to Stats' own topbar chrome).
+// Exposed via a getter so receipt-export.js can render the printed/shared
+// ticket in the CONNECTED POS's own chosen font too, rather than a single
+// font baked in for every business. Empty string when unset.
+let _statsBrandFont = '';
+function getStatsBrandFont() { return _statsBrandFont; }
+
 // Same Google Fonts map as legacy/app/branding.js's _GF_MAP — kept in sync so a
 // POS's chosen fonts render identically on the Stats client.
 const _STATS_GF_MAP = {
@@ -105,6 +113,7 @@ function applyStatsBranding(data) {
   const b = data || _STATS_DEFAULT_BRANDING;
   document.title = (b.name || _STATS_DEFAULT_BRANDING.name) + ' — Stats';
   _statsDayCycleStartHour = Number(b.dayCycleStartHour) || 0;
+  _statsBrandFont = (b.theme && b.theme.brand_font) || '';
 
   const nameEl = document.getElementById('topbar-biz-name');
   const subEl  = document.getElementById('topbar-biz-sub');
