@@ -11,7 +11,7 @@ let _locationEpoch = 0;
 let dayOffset = 0;
 let chartWeek = null, chartMonth = null;
 
-let menuItems = [];   // [{id, name, cat, price}] — populated by loadLocalData()
+let menuItems = [];   // [{id, name, cat, price, image}] — populated by loadLocalData()
 
 // Name→menuItem lookup, rebuilt only when menuItems itself is reassigned
 // (loadLocalData() always creates a fresh array when it changes, so caching

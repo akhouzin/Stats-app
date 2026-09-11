@@ -30,7 +30,7 @@ async function loadLocalData() {
     _salDays[d.staff_id][d.day_key] = d.status;
   });
   if (menuData.length > 0)
-    menuItems = menuData.map(i => ({ id: i.id, name: i.name, cat: i.cat, price: i.price }));
+    menuItems = menuData.map(i => ({ id: i.id, name: i.name, cat: i.cat, price: i.price, image: i.image || '' }));
   _charges = charges;
   _chargeDays = {};
   chargeDays.forEach(r => {

@@ -99,11 +99,15 @@ function renderToday() {
             <span>${fmtTime(o.time)}</span>
           </div>
           ${o.server !== '—' ? `<div class="live-order-server">${o.server}</div>` : ''}
-          <div class="live-order-items">${o.items.map(i => `
+          <div class="live-order-items">${o.items.map(i => {
+              const img = _menuByName().get(i.name)?.image;
+              return `
               <div class="live-order-item-row">
                 <span class="live-order-qtybadge">${i.qty}</span>
+                ${img ? `<span class="live-order-item-thumb"><img src="${img}" alt=""></span>` : ''}
                 <span>${i.name}</span>
-              </div>`).join('')}</div>
+              </div>`;
+            }).join('')}</div>
           <div class="live-order-total">${fmtMoney(o.total)} Dhs</div>
         </div>`).join('')
     : emptyMsg;
