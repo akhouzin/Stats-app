@@ -150,7 +150,7 @@ function renderRapport() {
     .filter(([, qty]) => qty > 0);
   document.getElementById('r-consumption').innerHTML = consRows.length
     ? consRows.map(([l, qty, u]) =>
-        `<div class="cons-row"><span class="cons-label">${l}</span><span class="cons-val">${_minvFmt(qty)} ${u}</span></div>`
+        `<div class="cons-row"><span class="cons-label">${l}</span><span class="cons-val">${_minvFmtQty(qty, u)}</span></div>`
       ).join('')
     : '<div class="empty">Aucune consommation</div>';
 }
