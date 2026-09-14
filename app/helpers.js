@@ -48,52 +48,9 @@ function getMonthStart() {
   return new Date(n.getFullYear(), n.getMonth(), 1);
 }
 
-// Consumption calc for a set of orders
-function calcConsumption(orders) {
-  const coffeeKw = ['espresso', 'café', 'cafe', 'nespresso', 'latte', 'cappuccino', 'iced', 'frappuccino'];
-  const milkKw   = ['lait', 'latte', 'cappuccino', 'creme', 'viennoise', 'chocolat', 'ness ness'];
-  let water = 0, coffeeG = 0, milkCl = 0, theG = 0;
-  let water50 = 0, oulmes = 0, oulmesFr = 0, sodas = 0;
-  let sucreTHe = 0, sucreCafe = 0;
-  const menuByName = _menuByName();
-  orders.forEach(o => {
-    o.items.forEach(item => {
-      const mi = menuByName.get(item.name);
-      if (!mi) return;
-      const nl = item.name.toLowerCase();
-      const hasCoffee = coffeeKw.some(k => nl.includes(k));
-      const hasMilk   = milkKw.some(k => nl.includes(k));
-      const noWater33 = ['Espresso Sans eau', 'Thé Marocain sans eau', 'Lait froid'];
-      if (mi.cat === 'Boissons Chaudes' && !noWater33.includes(item.name)) water += item.qty;
-      if (hasCoffee) coffeeG += item.qty * 10;
-      if (hasMilk)   milkCl  += item.qty * 10;
-      if (item.name === 'Thé Marocain')        theG     += item.qty * 5;
-      if (item.name === 'Eau minérale 50CL')   water50  += item.qty;
-      if (item.name === 'Eau gazeuse Oulmes')  oulmes   += item.qty;
-      if (item.name === 'Eau Oulmes fruitées') oulmesFr += item.qty;
-      if (item.name === 'Sodas')               sodas    += item.qty;
-      // Water items outside Boissons Chaudes (e.g. Menu Personnel) — skip already-named items to avoid double count
-      if (mi.cat !== 'Boissons Chaudes' && nl.includes('eau') &&
-          item.name !== 'Eau minérale 50CL' &&
-          item.name !== 'Eau gazeuse Oulmes' &&
-          item.name !== 'Eau Oulmes fruitées') {
-        if (nl.includes('oulmes') && nl.includes('fruit')) oulmesFr += item.qty;
-        else if (nl.includes('oulmes') || nl.includes('gazeuse')) oulmes += item.qty;
-        else if (nl.includes('50')) water50 += item.qty;
-        else water += item.qty;
-      }
-      // Sugar
-      if (item.name === 'Thé Marocain') {
-        sucreTHe += item.qty * 1;
-      } else if (noWater33.includes(item.name) || item.name === 'Espresso') {
-        sucreCafe += item.qty * 2;
-      } else if (mi.cat === 'Boissons Chaudes') {
-        sucreCafe += item.qty * 2;
-      }
-    });
-  });
-  return { water, coffeeG, milkCl, theG, water50, oulmes, oulmesFr, sodas, sucreTHe, sucreCafe };
-}
+// Consumption is now computed from Marchandise article links (marc_links) —
+// see page-inventory.js's minvStockIn()/minvStockOut(), fed by state.js's
+// _marcArticles/_marcLinks/_marcAchats. No hardcoded keyword/category list here.
 
 // ═══════════════════════════════════════
 // CLOCK

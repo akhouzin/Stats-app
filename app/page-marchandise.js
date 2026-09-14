@@ -7,8 +7,8 @@
 // (legacy/app/marchandise.js:_marcEffectivePrice()): a purchase's own
 // price_pu/pkg/pl (marc_achats, 2026-09-01) wins when set, else the article's
 // current catalog price (pu/pkg/pl). page-inventory.js stays loaded
-// (CONSUMABLES/MANUAL_KEYWORDS/fmtNum are still used by
-// page-barista.js/page-recette.js) — this file only replaces its PAGE, not
+// (_minvStockIn()/_minvStockOut()/fmtNum are still used by
+// page-barista.js/page-daily.js) — this file only replaces its PAGE, not
 // its data. Reuses page-inventory.js's toISODate() (loads earlier). Both the
 // day and month views render through receipt-export.js — real POS ticket
 // look (fonts, layout), Print/Share buttons — same treatment as

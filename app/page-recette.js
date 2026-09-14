@@ -151,20 +151,6 @@ function getDaySalaire(y, m, d) {
   return total;
 }
 
-function getDayConsoCost(y, m, d) {
-  const dayStart = new Date(y, m, d);
-  const dayEnd   = new Date(y, m, d + 1);
-  const orders   = allOrders.filter(o => o.time >= dayStart && o.time < dayEnd);
-  if (!orders.length) return 0;
-  const conso = calcConsumption(orders);
-  const keys  = ['coffeeG', 'milkCl', 'theG', 'water'];
-  return keys.reduce((sum, key) => {
-    const qty  = conso[key] || 0;
-    const cost = weightedAvgPrice(key);
-    return sum + (cost != null ? qty * cost : 0);
-  }, 0);
-}
-
 function getDayRevenue(y, m, d) {
   const dayStart = new Date(y, m, d);
   const dayEnd   = new Date(y, m, d + 1);

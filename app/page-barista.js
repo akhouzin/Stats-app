@@ -2,28 +2,17 @@
 // RAPPORT BARISTA
 // ═══════════════════════════════════════
 function renderBaristaReport(todayOrders, dayLabelLower) {
-  const now = new Date();
   dayLabelLower = dayLabelLower || "aujourd'hui";
-  const cons = calcConsumption(todayOrders);
 
-  // Build unified item list: consumables (auto-calc) + manual items (keyword-counted)
+  // One row per Marchandise article linked (Inventaire → Liens) to a sold
+  // item — no hardcoded consumable list. See page-inventory.js.
   const rows = [];
-
-  CONSUMABLES.forEach(c => {
-    const consumed  = cons[c.key] || 0;
-    const hasStock  = getLatestSnapshot(c.key, now) !== null;
-    const stock     = hasStock ? stockBalanceAt(c.key, now) : null;
+  _minvTrackedArticles().forEach(art => {
+    const consumed = _minvStockOut(art, todayOrders);
+    const hasStock = _marcAchats.some(a => a.article_id === art.id);
+    const stock    = hasStock ? _minvStockIn(art) - _minvStockOut(art) : null;
     if (consumed === 0 && !hasStock) return; // skip completely untracked + unused
-    rows.push({ label: c.label, unit: c.unit, consumed, stock, hasStock });
-  });
-
-  MANUAL_ITEMS.forEach(m => {
-    const kw       = MANUAL_KEYWORDS[m.key] || [];
-    const consumed = kw.length ? countSoldItems(todayOrders, kw) : 0;
-    const hasStock = getLatestSnapshot(m.key, now) !== null;
-    const stock    = hasStock ? stockBalanceAt(m.key, now) : null;
-    if (consumed === 0 && !hasStock) return;
-    rows.push({ label: m.label, unit: m.unit, consumed, stock, hasStock });
+    rows.push({ label: art.nom, unit: art.unit_label || 'unité', consumed, stock, hasStock });
   });
 
   if (!rows.length) {

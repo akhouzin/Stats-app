@@ -16,13 +16,11 @@ let menuItems = [];   // [{id, name, cat, price, image}] — populated by loadLo
 // Name→menuItem lookup, rebuilt only when menuItems itself is reassigned
 // (loadLocalData() always creates a fresh array when it changes, so caching
 // by reference is safe and self-invalidating). Every per-order-item
-// consumer (helpers.js:calcConsumption(), page-today.js/page-daily.js/
-// page-revenue.js's item aggregations) used to call menuItems.find() once
-// PER ITEM — an O(orders × items × menuItems) scan that measured over a
-// full second of main-thread blocking on a POS with a few thousand orders
-// loaded (page-recette.js's day-by-day table makes it worse still, calling
-// calcConsumption() once per day of the month). _menuByName() turns every
-// one of those into an O(1) Map.get(), so the real cost becomes
+// consumer (page-today.js/page-daily.js/page-revenue.js's item aggregations)
+// used to call menuItems.find() once PER ITEM — an O(orders × items ×
+// menuItems) scan that measured over a full second of main-thread blocking
+// on a POS with a few thousand orders loaded. _menuByName() turns every one
+// of those into an O(1) Map.get(), so the real cost becomes
 // O(orders × items + menuItems) — the lookup building is now a single pass
 // over the (typically small) menu, not one per order line.
 let _menuByNameCache = null;
@@ -34,8 +32,6 @@ function _menuByName() {
   }
   return _menuByNameCache;
 }
-
-let _restocks = {};   // key → [{id, date, amount}]
 
 let _marcCategories = []; // marc_categories: [{id, nom, sort_order}]
 let _marcArticles   = []; // marc_articles: [{id, nom, cat_id, pu, pkg, pl, barcode, unit_label, conv_pkg, conv_pl}]

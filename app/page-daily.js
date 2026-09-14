@@ -143,23 +143,14 @@ function renderRapport() {
     'TOTAL', fmtMoney(total)
   );
 
-  // Consumption
-  const { water, water50, oulmes, oulmesFr, sodas, coffeeG, milkCl, theG, sucreTHe, sucreCafe } = calcConsumption(orders);
-  const consRows = [
-    ['Eau minérale 33cl',   water,     `bouteille${water > 1 ? 's' : ''}`],
-    ['Eau minérale 50cl',   water50,   `bouteille${water50 > 1 ? 's' : ''}`],
-    ['Eau gazeuse Oulmes',  oulmes,    `bouteille${oulmes > 1 ? 's' : ''}`],
-    ['Eau Oulmes fruitées', oulmesFr,  `bouteille${oulmesFr > 1 ? 's' : ''}`],
-    ['Sodas',               sodas,     `unité${sodas > 1 ? 's' : ''}`],
-    ['Café',                coffeeG,   'g'],
-    ['Lait',                milkCl,    'cl'],
-    ['Thé Marocain',        theG,      'g'],
-    ['Sucre thé',           sucreTHe,  `pcs`],
-    ['Sucre café',          sucreCafe, `pcs`],
-  ].filter(([, qty]) => qty > 0);
+  // Consumption — Marchandise articles linked (Inventaire → Liens) to items
+  // sold this month. No hardcoded consumable list — see page-inventory.js.
+  const consRows = _minvTrackedArticles()
+    .map(art => [art.nom, _minvStockOut(art, orders), art.unit_label || 'unité'])
+    .filter(([, qty]) => qty > 0);
   document.getElementById('r-consumption').innerHTML = consRows.length
     ? consRows.map(([l, qty, u]) =>
-        `<div class="cons-row"><span class="cons-label">${l}</span><span class="cons-val">${qty} ${u}</span></div>`
+        `<div class="cons-row"><span class="cons-label">${l}</span><span class="cons-val">${_minvFmt(qty)} ${u}</span></div>`
       ).join('')
     : '<div class="empty">Aucune consommation</div>';
 }

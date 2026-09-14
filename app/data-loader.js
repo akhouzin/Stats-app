@@ -2,8 +2,7 @@
 // LOAD DATA
 // ═══════════════════════════════════════
 async function loadLocalData() {
-  const [restocks, salStaff, salDays, menuData, charges, chargeDays, marcCats, marcArts, marcAchats, marcLinks] = await Promise.all([
-    apiGet('/api/restocks'),
+  const [salStaff, salDays, menuData, charges, chargeDays, marcCats, marcArts, marcAchats, marcLinks] = await Promise.all([
     apiGet('/api/sal/staff'),
     apiGet('/api/sal/days'),
     apiGet('/api/menu-items'),
@@ -18,11 +17,6 @@ async function loadLocalData() {
   _marcArticles   = marcArts;
   _marcAchats     = marcAchats;
   _marcLinks      = marcLinks;
-  _restocks = {};
-  restocks.forEach(r => {
-    if (!_restocks[r.key]) _restocks[r.key] = [];
-    _restocks[r.key].push({ id: r.id, date: r.date, amount: r.amount, price: r.price_per_unit || null });
-  });
   _salStaff = salStaff;
   _salDays = {};
   salDays.forEach(d => {
@@ -244,7 +238,6 @@ async function ensureOrdersLoadedThrough(targetDate, padMonths = HISTORY_EXTEND_
       allOrders = allOrders.concat(olderOrders);
       _historyLoadedFrom = gapStart;
       _ordersStamp++;
-      clearConsumptionCache();
     } finally {
       if (statusEl) statusEl.textContent = prevStatus;
       _historyExtendPromise = null;
@@ -314,7 +307,6 @@ async function loadData(onTodayReady) {
     allOrders = mapOrders(allRaw, cancelledKeys);
     _historyLoadedFrom = windowStart;
     _ordersStamp++;
-    clearConsumptionCache();
     historyLoaded = true;
 
     document.getElementById('live-status').textContent = 'En ligne';
