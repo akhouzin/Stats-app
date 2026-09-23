@@ -162,14 +162,14 @@
            stays visible while the (potentially long) charges sheet scrolls
            beneath it, instead of a separate fixed bar floating over the
            bottom nav (see system/edit-history.md, 2026-08-29). -->
-      <div id="rec-summary-card" class="card rec-summary-embedded"></div>
-
       <!-- Month nav -->
       <div class="day-nav" style="margin-bottom:12px;">
         <button class="day-nav-btn" id="rec-prev" onclick="changeRecMonth(-1)">‹</button>
         <div><div class="day-label" id="rec-month-label">—</div></div>
         <button class="day-nav-btn" id="rec-next" onclick="changeRecMonth(1)">›</button>
       </div>
+
+      <div id="rec-summary-card" class="card rec-summary-embedded"></div>
 
       <!-- Add charge bar -->
       <div class="sal-top-bar">
@@ -190,8 +190,8 @@
       <!-- Recette & Charges table -->
       <div class="card" id="rec-sheet-card">
         <div class="card-title" id="rec-sheet-title">Recette & Charges</div>
-        <div class="sal-sheet-wrap">
-          <table class="sal-sheet-table" id="rec-sheet"></table>
+        <div class="rec-table-wrap">
+          <table class="rec-table" id="rec-sheet"></table>
         </div>
       </div>
 
@@ -235,6 +235,7 @@
   <div class="inv-period-bar">
     <button class="inv-period-btn active" id="marc-scope-btn-day" onclick="setMarchScope('day')">Jour</button>
     <button class="inv-period-btn" id="marc-scope-btn-month" onclick="setMarchScope('month')">Mois</button>
+    <button class="inv-period-btn" id="marc-scope-btn-stock" onclick="setMarchScope('stock')">Stock</button>
   </div>
 
   <!-- Day scope -->
@@ -310,6 +311,11 @@
         </div>
       </div>
     </div>
+  </div>
+
+  <!-- Stock scope — consumption per article + à commander (page-marc-stock.js) -->
+  <div id="marc-view-stock" style="display:none;">
+    <div id="marc-stock-body"></div>
   </div>
 </div>
 
@@ -402,6 +408,7 @@
 <script src="./app/page-revenue.js"></script>
 <script src="./app/page-inventory.js"></script>
 <script src="./app/page-marchandise.js"></script>
+<script src="./app/page-marc-stock.js"></script>
 <script src="./app/page-salary.js"></script>
 <script src="./app/page-recette.js"></script>
 <script src="./app/app-init.js"></script>

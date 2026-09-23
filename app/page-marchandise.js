@@ -15,7 +15,7 @@
 // page-today.js/page-daily.js's "Articles Vendus" lists.
 
 let _pmcDayOffset = 0;
-let _pmcScope = 'day';        // 'day' | 'month' — top-level toggle, mirrors page-inventory.js's period-bar convention
+let _pmcScope = 'day';        // 'day' | 'month' | 'stock' — top-level toggle, mirrors page-inventory.js's period-bar convention
 let _pmcMonthOffset = 0;      // months back from the current one, for the Month scope's own nav
 let _pmcMonthView = 'simple'; // 'simple' | 'cats' | 'trends' — mirrors page-daily.js's Rapport view-mode tabs
 
@@ -41,9 +41,12 @@ function setMarchScope(scope) {
   _pmcScope = scope;
   document.getElementById('marc-scope-btn-day').classList.toggle('active', scope === 'day');
   document.getElementById('marc-scope-btn-month').classList.toggle('active', scope === 'month');
+  document.getElementById('marc-scope-btn-stock').classList.toggle('active', scope === 'stock');
   document.getElementById('marc-view-day').style.display = scope === 'day' ? 'block' : 'none';
   document.getElementById('marc-view-month').style.display = scope === 'month' ? 'block' : 'none';
+  document.getElementById('marc-view-stock').style.display = scope === 'stock' ? 'block' : 'none';
   if (scope === 'month') renderMarchMonth();
+  if (scope === 'stock') renderMarchStock(); // page-marc-stock.js (loads next)
 }
 
 // One article's price-type breakdown for a day: up to 3 printed-style rows
@@ -142,6 +145,7 @@ function _pmcBuildSections(byArticle, artMap, catMap) {
 }
 
 function renderMarchandise() {
+  if (_pmcScope === 'stock' && typeof renderMarchStock === 'function') renderMarchStock();
   const day = _pmcDateForOffset(_pmcDayOffset);
   const iso = toISODate(day);
   const dayLabel = getDayKey(day);

@@ -52,6 +52,20 @@ function calcStaffStats(staffId, y, m, today, rate) {
   return stats;
 }
 
+// Money over the month — mirrors legacy/app/employee-manager.js:_empSalMoney().
+// A Payé/Avance day is still a worked day (the status records the payment
+// handed over that day), so the month's wages count every worked day and the
+// payments are subtracted from THAT, not from the unpaid days only:
+//   earned = (Travaillé + Payé + Avance days) × rate
+//   paidOut = Payé + Avance amounts · reste = earned − paidOut
+//   projected = earned + remaining future days × rate
+function salMoney(stats, rate) {
+  const days    = stats.worked + stats.paid + stats.advance;
+  const earned  = days * rate;
+  const paidOut = stats.paidAmount + stats.advanceAmount;
+  return { days, earned, paidOut, reste: earned - paidOut, projected: earned + stats.pending * rate };
+}
+
 // ── Shared sheet table (read-only — no click handlers) ──
 function buildSharedTable(staff, y, m, today) {
   const daysInMonth = new Date(y, m + 1, 0).getDate();
@@ -138,61 +152,54 @@ function renderSalaire() {
   document.getElementById('sal-sheet').innerHTML = buildSharedTable(staff, y, m, today);
 
   // ── Bottom panel ──
-  let totalNonPayé = 0, totalDejaPayé = 0, totalReste = 0;
+  let totalEarned = 0, totalDejaPayé = 0, totalReste = 0, totalProjected = 0;
+  const line = (label, val, cls = '') =>
+    `<div class="sal-line${cls}"><span>${label}</span><span>${val}</span></div>`;
 
-  document.getElementById('sal-bp-staff').innerHTML = staff.map(s => {
-    const rate      = s.rate || 0;
-    const stats     = calcStaffStats(s.id, y, m, today, rate);
-    const nonPayé   = stats.workedAmount;
-    const dejaPayé  = stats.paidAmount + stats.advanceAmount;
-    const reste     = nonPayé - dejaPayé;
-    totalNonPayé  += nonPayé;
-    totalDejaPayé += dejaPayé;
-    totalReste    += reste;
-    const resteColor = reste > 0 ? 'var(--red)' : 'var(--green)';
+  document.getElementById('sal-bp-staff').innerHTML = staff.map((s, i) => {
+    const rate  = s.rate || 0;
+    const stats = calcStaffStats(s.id, y, m, today, rate);
+    const money = salMoney(stats, rate);
+    totalEarned    += money.earned;
+    totalDejaPayé  += money.paidOut;
+    totalReste     += money.reste;
+    totalProjected += money.projected;
     return `
       <div class="sal-bp-staff-item">
         <div class="sal-bp-staff-head">
-          <div class="sal-bp-staff-name">${s.name}</div>
+          <div class="sal-bp-staff-name"><span class="sal-rank">${i + 1}.</span> ${s.name}</div>
           <span style="font-size:11px;color:var(--text-dim);">${rate} Dhs/j</span>
         </div>
-        <div class="sal-summary">
-          <span class="sal-sum-chip sal-chip-worked">Travaillé ${stats.worked}j</span>
-          <span class="sal-sum-chip sal-chip-paid">Payé ${stats.paid}j</span>
-          <span class="sal-sum-chip sal-chip-advance">Avance ${stats.advance}j</span>
-          <span class="sal-sum-chip sal-chip-absent">Absent ${stats.absent}j</span>
+        <div class="sal-days-line">
+          ${money.days} j travaillés${stats.absent ? ` · ${stats.absent} abs.` : ''}${stats.pending ? ` · ${stats.pending} à venir` : ''}${stats.paid || stats.advance ? ` · dont ${stats.paid} payés, ${stats.advance} avances` : ''}
         </div>
-        ${rate > 0 ? `
-        <div class="sal-bp-staff-fin">
-          <div class="sal-bp-fin-item"><div class="sal-bp-fin-label">Non payé</div><div class="sal-bp-fin-val">${fmtMoney(nonPayé)} <span style="font-size:11px;">Dhs</span></div></div>
-          <div class="sal-bp-fin-item"><div class="sal-bp-fin-label">Déjà payé</div><div class="sal-bp-fin-val" style="color:var(--green);">${fmtMoney(dejaPayé)} <span style="font-size:11px;">Dhs</span></div></div>
-          <div class="sal-bp-fin-item"><div class="sal-bp-fin-label">Reste à payer</div><div class="sal-bp-fin-val" style="color:${resteColor};">${fmtMoney(reste)} <span style="font-size:11px;">Dhs</span></div></div>
+        ${rate > 0 || money.paidOut > 0 ? `
+        <div class="sal-lines">
+          ${line(`Salaire gagné <small>(${money.days} × ${rate})</small>`, fmtMoney(money.earned))}
+          ${line('Déjà payé', fmtMoney(money.paidOut))}
+          ${line(money.reste >= 0 ? 'Reste à payer' : 'Trop-perçu', fmtMoney(Math.abs(money.reste)) + ' Dhs', ' sal-line--strong')}
+          ${stats.pending ? line('Prévu fin de mois', fmtMoney(money.projected), ' sal-line--dim') : ''}
         </div>` : ''}
       </div>`;
   }).join('');
 
-  // Daily totals for today
+  // Today: wages of everyone not marked absent vs. what was handed over today.
   const todayKey = getSalDayKey(today);
   let dailyTotal = 0, dailyPaid = 0;
   staff.forEach(s => {
     const rate = s.rate || 0;
-    if (!rate) return;
-    dailyTotal += rate;
     const { base, amount } = parseSalStatus((_salDays[s.id] || {})[todayKey] || null);
-    if (base === 'paid' || base === 'advance') {
-      dailyPaid += amount != null ? amount : rate;
-    }
+    if (base !== 'absent') dailyTotal += rate;
+    if (base === 'paid' || base === 'advance') dailyPaid += amount != null ? amount : rate;
   });
   const dailyReste = dailyTotal - dailyPaid;
-
-  const resteColor = totalReste > 0 ? 'var(--red)' : 'var(--green)';
 
   document.getElementById('sal-bp-peek-nums').innerHTML = `
     <table class="sal-bp-summary" style="margin-top:6px;">
       <thead>
         <tr>
           <th></th>
-          <th>À payer</th>
+          <th>Gagné</th>
           <th>Payé</th>
           <th>Reste</th>
         </tr>
@@ -200,16 +207,22 @@ function renderSalaire() {
       <tbody>
         <tr>
           <td>Aujourd'hui</td>
-          <td class="col-du">${fmtMoney(dailyTotal)}</td>
-          <td class="col-pay">${fmtMoney(dailyPaid)}</td>
-          <td class="${dailyReste > 0 ? 'col-rest-red' : 'col-rest-ok'}">${fmtMoney(dailyReste)}</td>
+          <td>${fmtMoney(dailyTotal)}</td>
+          <td>${fmtMoney(dailyPaid)}</td>
+          <td><b>${fmtMoney(dailyReste)}</b></td>
         </tr>
         <tr>
           <td>Ce mois</td>
-          <td class="col-du">${fmtMoney(totalNonPayé)}</td>
-          <td class="col-pay">${fmtMoney(totalDejaPayé)}</td>
-          <td class="${totalReste > 0 ? 'col-rest-red' : 'col-rest-ok'}">${fmtMoney(totalReste)}</td>
+          <td>${fmtMoney(totalEarned)}</td>
+          <td>${fmtMoney(totalDejaPayé)}</td>
+          <td><b>${fmtMoney(totalReste)}</b></td>
         </tr>
+        ${totalProjected !== totalEarned ? `<tr class="sal-row-dim">
+          <td>Prévu fin de mois</td>
+          <td>${fmtMoney(totalProjected)}</td>
+          <td></td>
+          <td>${fmtMoney(totalProjected - totalDejaPayé)}</td>
+        </tr>` : ''}
       </tbody>
     </table>`;
 

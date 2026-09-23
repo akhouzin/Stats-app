@@ -135,7 +135,16 @@ async function setChargeAmount(chargeId, dayKey, val) {
     if (!_chargeDays[chargeId]) _chargeDays[chargeId] = {};
     _chargeDays[chargeId][dayKey] = amount;
   }
-  renderRecetteSummary();
+  // Re-render so the day's Bénéfice and the month totals follow the edit,
+  // then give focus back to whichever charge cell the user tabbed into.
+  const active = document.activeElement;
+  const refocus = active && active.classList && active.classList.contains('rec-charge-input')
+    ? { c: active.dataset.c, d: active.dataset.d } : null;
+  renderRecette();
+  if (refocus) {
+    const el = document.querySelector(`.rec-charge-input[data-c="${refocus.c}"][data-d="${refocus.d}"]`);
+    if (el) el.focus();
+  }
 }
 
 function getDaySalaire(y, m, d) {
@@ -163,113 +172,157 @@ function getSalDayKeyRec(y, m, d) {
   return `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
 }
 
-let _recSummaryState = { totalRec: 0, totalChg: 0, byCharge: [] };
+// Marchandise bought per day (Dhs) for one month, keyed 'YYYY-MM-DD' —
+// costed with page-marchandise.js's _pmcAchatCost() (catalog price unless the
+// purchase carries its own price of the day), so the Recette column always
+// equals the Marchandise tab's day total.
+function getMonthMarchandise(y, m) {
+  const prefix = `${y}-${String(m+1).padStart(2,'0')}-`;
+  const artMap = Object.fromEntries(_marcArticles.map(a => [a.id, a]));
+  const byDay = {};
+  _marcAchats.forEach(a => {
+    if (!a.date || !a.date.startsWith(prefix)) return;
+    const art = artMap[a.article_id];
+    if (!art) return;
+    byDay[a.date] = (byDay[a.date] || 0) + _pmcAchatCost(art, a);
+  });
+  return byDay;
+}
+
+let _recSummaryState = { totalRec: 0, totalSal: 0, totalMarc: 0, totalOther: 0, byCharge: [], activeDays: 0 };
+
+function _recFmt(n) {
+  return Math.round(n).toLocaleString('fr-FR');
+}
+
+function _recEsc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, c =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
 
 function renderRecetteSummary() {
-  const { totalRec, totalChg, byCharge } = _recSummaryState;
+  const { totalRec, totalSal, totalMarc, totalOther, activeDays } = _recSummaryState;
+  const totalChg = totalSal + totalMarc + totalOther;
   const net = totalRec - totalChg;
-  const netColor = net >= 0 ? 'var(--green)' : 'var(--red)';
+  const margin = totalRec > 0 ? Math.round(net / totalRec * 100) : null;
+  const tile = (label, val, cls, sub) => `
+    <div class="rec-tile${cls ? ' ' + cls : ''}">
+      <div class="rec-tile-label">${label}</div>
+      <div class="rec-tile-val">${_recFmt(val)}<small> Dhs</small></div>
+      ${sub ? `<div class="rec-tile-sub">${sub}</div>` : ''}
+    </div>`;
+  const pct = v => totalRec > 0 ? `${Math.round(v / totalRec * 100)}% de la recette` : '';
   document.getElementById('rec-summary-card').innerHTML = `
-    <div style="font-family:'Cinzel',serif;font-size:9px;letter-spacing:1.5px;color:var(--green-dark);text-transform:uppercase;margin-bottom:8px;">Récapitulatif du mois</div>
-    <div class="rec-bar-cols">
-      <div class="rec-bar-item">
-        <div class="rec-bar-label">Recette</div>
-        <div class="rec-bar-val" style="color:var(--green);">${Math.round(totalRec)} <span style="font-size:10px;">Dhs</span></div>
-      </div>
-      <div class="rec-bar-sep">−</div>
-      <div class="rec-bar-item">
-        <div class="rec-bar-label">Charges</div>
-        <div class="rec-bar-val" style="color:var(--red);">${Math.round(totalChg)} <span style="font-size:10px;">Dhs</span></div>
-      </div>
-      <div class="rec-bar-sep">=</div>
-      <div class="rec-bar-item">
-        <div class="rec-bar-label">Bénéfice</div>
-        <div class="rec-bar-val" style="color:${netColor};font-size:20px;">${Math.round(net)} <span style="font-size:10px;">Dhs</span></div>
-      </div>
+    <div class="rec-summary-title">Récapitulatif du mois</div>
+    <div class="rec-tiles">
+      ${tile('Recette', totalRec, 'rec-tile--rec', activeDays ? `${activeDays} jours · moy. ${_recFmt(totalRec / activeDays)}/j` : '')}
+      ${tile('Salaires', totalSal, '', pct(totalSal))}
+      ${tile('Marchandise', totalMarc, '', pct(totalMarc))}
+      ${tile('Autres charges', totalOther, '', pct(totalOther))}
+    </div>
+    <div class="rec-net ${net >= 0 ? 'is-pos' : 'is-neg'}">
+      <span>Bénéfice</span>
+      <span class="rec-net-val">${_recFmt(net)} Dhs${margin !== null ? `<small> · marge ${margin}%</small>` : ''}</span>
     </div>`;
 }
 
 function renderRecette() {
   const now = new Date();
-  const y   = now.getFullYear();
-  const m   = now.getMonth() + recMonthOffset;
-  const monthDate   = new Date(y, m, 1);
-  const daysInMonth = new Date(y, m + 1, 0).getDate();
-  const today       = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const monthDate = new Date(now.getFullYear(), now.getMonth() + recMonthOffset, 1);
+  const my = monthDate.getFullYear(), mm = monthDate.getMonth();
+  const daysInMonth = new Date(my, mm + 1, 0).getDate();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
   const rawLabel = monthDate.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
-  document.getElementById('rec-month-label').textContent = rawLabel.charAt(0).toUpperCase() + rawLabel.slice(1);
+  const label = rawLabel.charAt(0).toUpperCase() + rawLabel.slice(1);
+  document.getElementById('rec-month-label').textContent = label;
   document.getElementById('rec-prev').disabled = false;
   document.getElementById('rec-next').disabled = recMonthOffset >= 0;
-  document.getElementById('rec-sheet-title').textContent =
-    'Recette & Charges — ' + rawLabel.charAt(0).toUpperCase() + rawLabel.slice(1);
+  document.getElementById('rec-sheet-title').textContent = 'Recette & Charges — ' + label;
 
-  // Build table
+  const marcByDay = getMonthMarchandise(my, mm);
+
+  // Columns: Jour | Recette | Salaires | Marchandise | <charges…> | Bénéfice.
+  // (The old "Total charges" column was removed — Bénéfice already nets
+  // every cost, and the month totals sit in the footer row + summary card.)
   let html = '<thead><tr>';
-  html += '<th class="sal-sheet-th-day">Jour</th>';
-  html += '<th class="sal-sheet-th" style="color:#1b5e20;">Recette</th>';
-  html += '<th class="sal-sheet-th" style="color:var(--red);">Salaire</th>';
+  html += '<th class="rec-th rec-th-day">Jour</th>';
+  html += '<th class="rec-th rec-th-rec">Recette</th>';
+  html += '<th class="rec-th">Salaires</th>';
+  html += '<th class="rec-th">Marchandise</th>';
   _charges.forEach(c => {
-    html += `<th class="sal-sheet-th" style="color:var(--red);">${c.name}<br>
-      <span onclick="renameCharge('${c.id}')" style="font-size:10px;cursor:pointer;color:var(--text-dim);">✎</span>
-      <span onclick="removeCharge('${c.id}')" style="font-size:10px;cursor:pointer;color:var(--red);margin-left:4px;">✕</span></th>`;
+    html += `<th class="rec-th rec-th-charge">
+      <div class="rec-th-name">${_recEsc(c.name)}</div>
+      <div class="rec-th-actions">
+        <button onclick="renameCharge('${c.id}')" title="Renommer">✎</button>
+        <button onclick="removeCharge('${c.id}')" title="Supprimer">✕</button>
+      </div></th>`;
   });
-  html += '<th class="sal-sheet-th">Total charges</th>';
-  html += '<th class="sal-sheet-th" style="color:var(--green-dark);">Bénéfice</th>';
+  html += '<th class="rec-th rec-th-ben">Bénéfice</th>';
   html += '</tr></thead><tbody>';
 
-  let totalRec = 0, totalChg = 0;
+  let totalRec = 0, totalSal = 0, totalMarc = 0, totalOther = 0, totalBen = 0, activeDays = 0;
   const byCharge = _charges.map(c => ({ id: c.id, name: c.name, total: 0 }));
+  const dash = '<span class="rec-zero">—</span>';
+  const cell = (v, cls = '') => `<td class="rec-td${cls}">${v > 0 ? _recFmt(v) : dash}</td>`;
 
   for (let d = 1; d <= daysInMonth; d++) {
-    const date      = new Date(y, m, d);
-    const dayKey    = getSalDayKeyRec(y, m, d);
+    const date      = new Date(my, mm, d);
+    const dayKey    = getSalDayKeyRec(my, mm, d);
     const isToday   = date.getTime() === today.getTime();
     const isFuture  = date > today;
     const dow       = date.getDay();
     const isWeekend = dow === 0 || dow === 6;
     const dayLabel  = date.toLocaleDateString('fr-FR', { weekday: 'short', day: '2-digit' });
 
-    const trCls = ['sal-sheet-tr', isToday ? 'sal-tr-today' : '', isWeekend ? 'sal-tr-weekend' : ''].filter(Boolean).join(' ');
+    const trCls = ['rec-tr', isToday ? 'rec-tr-today' : '', isWeekend ? 'rec-tr-weekend' : '', isFuture ? 'rec-tr-future' : '']
+      .filter(Boolean).join(' ');
 
-    const rec = isFuture ? 0 : getDayRevenue(y, m, d);
-    totalRec += rec;
-    const daySal = isFuture ? 0 : getDaySalaire(y, m, d);
-    let dayTotalChg = daySal;
+    const rec  = isFuture ? 0 : getDayRevenue(my, mm, d);
+    const sal  = isFuture ? 0 : getDaySalaire(my, mm, d);
+    const marc = marcByDay[dayKey] || 0;
+    let other = 0;
     _charges.forEach((c, ci) => {
       const amt = (_chargeDays[c.id] || {})[dayKey] || 0;
-      dayTotalChg += amt;
+      other += amt;
       byCharge[ci].total += amt;
     });
-    totalChg += dayTotalChg;
-    const ben = rec - dayTotalChg;
-    const benColor = ben >= 0 ? '#1b5e20' : 'var(--red)';
+    const ben = rec - sal - marc - other;
+    const hasAny = rec || sal || marc || other;
+    totalRec += rec; totalSal += sal; totalMarc += marc; totalOther += other;
+    totalBen += ben;
+    if (rec > 0) activeDays++;
 
     html += `<tr class="${trCls}">`;
-    html += `<td class="sal-sheet-td-day">${dayLabel}</td>`;
-    // Recette cell
-    html += `<td class="sal-sheet-cell" style="background:${isFuture?'#fff':'#e8f5e9'};color:#1b5e20;font-weight:700;">${isFuture ? '—' : (rec > 0 ? Math.round(rec) : '0')}</td>`;
-    // Salaire cell
-    html += `<td class="sal-sheet-cell" style="background:#fff3e0;color:#b45309;font-weight:700;">${daySal > 0 ? Math.round(daySal) : '—'}</td>`;
-    // Charge input cells
+    html += `<td class="rec-td-day">${dayLabel}</td>`;
+    html += isFuture ? `<td class="rec-td rec-td-rec">${dash}</td>` : cell(rec, ' rec-td-rec');
+    html += cell(sal);
+    html += cell(marc);
     _charges.forEach(c => {
       const amt = (_chargeDays[c.id] || {})[dayKey];
-      html += `<td class="rec-charge-cell">
-        <input class="rec-charge-input" type="number" min="0" step="1"
-          value="${amt != null ? amt : ''}" placeholder="0"
-          onchange="setChargeAmount('${c.id}','${dayKey}',this.value)"
-          ${isFuture ? 'style="opacity:0.4;"' : ''}>
-      </td>`;
+      html += `<td class="rec-td rec-charge-cell"><input class="rec-charge-input" type="number" inputmode="decimal" min="0" step="1"
+          data-c="${c.id}" data-d="${dayKey}" value="${amt != null ? amt : ''}" placeholder="—"
+          onchange="setChargeAmount('${c.id}','${dayKey}',this.value)"></td>`;
     });
-    // Totals
-    html += `<td class="sal-sheet-cell" style="background:#fff3e0;color:#b45309;font-weight:700;">${Math.round(dayTotalChg)}</td>`;
-    html += `<td class="sal-sheet-cell" style="background:${ben<0?'#ffcdd2':'#f1f8e9'};color:${benColor};font-weight:700;">${isFuture ? '—' : Math.round(ben)}</td>`;
+    html += !hasAny
+      ? `<td class="rec-td rec-td-ben">${dash}</td>`
+      : `<td class="rec-td rec-td-ben ${ben >= 0 ? 'is-pos' : 'is-neg'}">${_recFmt(ben)}</td>`;
     html += '</tr>';
   }
   html += '</tbody>';
+
+  // Month totals footer — same columns as the body.
+  html += `<tfoot><tr>
+    <td class="rec-td-day">Total</td>
+    <td class="rec-td rec-td-rec">${_recFmt(totalRec)}</td>
+    <td class="rec-td">${_recFmt(totalSal)}</td>
+    <td class="rec-td">${_recFmt(totalMarc)}</td>
+    ${byCharge.map(c => `<td class="rec-td">${_recFmt(c.total)}</td>`).join('')}
+    <td class="rec-td rec-td-ben ${totalBen >= 0 ? 'is-pos' : 'is-neg'}">${_recFmt(totalBen)}</td>
+  </tr></tfoot>`;
+
   document.getElementById('rec-sheet').innerHTML = html;
 
-  // Summary
-  _recSummaryState = { totalRec, totalChg, byCharge };
+  _recSummaryState = { totalRec, totalSal, totalMarc, totalOther, byCharge, activeDays };
   renderRecetteSummary();
 }
