@@ -44,10 +44,15 @@ jobs:
           /usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName 'ERPGEN Stats'" "$PLIST" \
             || /usr/libexec/PlistBuddy -c "Add :CFBundleDisplayName string 'ERPGEN Stats'" "$PLIST"
 
+      # The runner's Homebrew Python refuses system-wide pip installs (PEP 668).
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
       - name: App icon
         run: |
-          python3 -m pip install --quiet pillow
-          python3 gen-ios-icon.py "$RUNNER_TEMP/AppIcon-1024.png"
+          python -m pip install --quiet pillow
+          python gen-ios-icon.py "$RUNNER_TEMP/AppIcon-1024.png"
           # Overwrite every icon slot in the template at its own pixel size.
           for f in ios/App/App/Assets.xcassets/AppIcon.appiconset/*.png; do
             s=$(sips -g pixelWidth "$f" | awk '/pixelWidth/ {print $2}')
