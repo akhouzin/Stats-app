@@ -123,6 +123,13 @@ function renderInsights() {
     </div>`;
 }
 
+function _redrawRevenueWhenChartLoads() {
+  const s = document.getElementById('chartjs-lib');
+  if (!s || s._revHooked) return;
+  s._revHooked = true;
+  s.addEventListener('load', () => { _revStamp = -1; renderRevenue(); }, { once: true });
+}
+
 function renderRevenue() {
   if (_revStamp === _ordersStamp) return;
   _revStamp = _ordersStamp;
@@ -154,7 +161,14 @@ function renderRevenue() {
     weekRevs.push(parseFloat((dayRevMap[getDayKey(d)] || 0).toFixed(2)));
   }
 
-  if (chartWeek) {
+  // chart.js loads with `defer` (index.html) so it never blocks the first
+  // paint; if this runs before it has arrived, draw the charts on its load.
+  const chartsReady = typeof Chart !== 'undefined';
+  if (!chartsReady) _redrawRevenueWhenChartLoads();
+
+  if (!chartsReady) {
+    // charts drawn once chart.js arrives
+  } else if (chartWeek) {
     chartWeek.data.labels = weekDays;
     chartWeek.data.datasets[0].data = weekRevs;
     chartWeek.update('none');
@@ -184,7 +198,9 @@ function renderRevenue() {
     mData.push(parseFloat((dayRevMap[getDayKey(day)] || 0).toFixed(2)));
   }
 
-  if (chartMonth) {
+  if (!chartsReady) {
+    // charts drawn once chart.js arrives
+  } else if (chartMonth) {
     chartMonth.data.labels = mLabels;
     chartMonth.data.datasets[0].data = mData;
     chartMonth.update('none');

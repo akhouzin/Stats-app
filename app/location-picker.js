@@ -17,31 +17,62 @@ const _LOC_KEY = 'cp_locations';
 // POS after a switch and discard it instead of overwriting the new POS's
 // data with it (was the cause of switching restaurants sometimes showing a
 // mix of both / the wrong one's numbers).
-function _activateLocation(url) {
+//
+// Both first snapshot the restaurant being left (store-cache.js) so coming
+// back to it is instant, then empty every per-restaurant global — nothing
+// (orders, _historyLoadedFrom's extended window, menu, salary…) may carry
+// over into the next restaurant. _switchWithTransition() then restores the
+// new restaurant's own snapshot if it has one.
+let _prevLocationUrl = null; // restaurant active before the latest switch — fallback if the switch fails
+
+function _leaveActiveLocation() {
+  const prev = localStorage.getItem('cp_api_url');
+  if (prev) _storeSnapshotSave(prev);
+  _prevLocationUrl = prev;
   _locationEpoch++;
-  // _historyLoadedFrom (data-loader.js) tracks how far back THIS restaurant's
-  // order history has been loaded — it must not carry over from whichever
-  // restaurant was active before (e.g. one previously paged far back via
-  // Recette navigation), or the newly-selected restaurant's first load would
-  // inherit that oversized window instead of its own default one.
-  _historyLoadedFrom = null;
-  historyLoaded = false;
+  _storeStateReset();
   // If a lazy backward extension (ensureOrdersLoadedThrough) was still in
   // flight for the restaurant being switched away from, its own _locSyncEnd()
   // call will no-op once it resolves (its epoch no longer matches) — clear
-  // the dot here instead, so it never gets stuck lit for a switch the new
-  // restaurant may never itself trigger one for.
+  // the dot here instead, so it never gets stuck lit.
   const btn = document.getElementById('loc-settings-btn');
   if (btn) btn.classList.remove('loc-syncing');
+}
+function _activateLocation(url) {
+  _leaveActiveLocation();
   localStorage.setItem('cp_api_url', url);
 }
 function _deactivateLocation() {
-  _locationEpoch++;
-  _historyLoadedFrom = null;
-  historyLoaded = false;
-  const btn = document.getElementById('loc-settings-btn');
-  if (btn) btn.classList.remove('loc-syncing');
+  _leaveActiveLocation();
   localStorage.removeItem('cp_api_url');
+}
+
+// Stores added by scanning a POS's bare tunnel QR are saved under their
+// hostname ("vitacoscloud.erpgen.net"). Once that POS's branding is known
+// (branding.js:fetchBrandingFor()), give the entry its real business name —
+// unless the user already named it themselves.
+function _autoNameLocation(url, bizName) {
+  const name = String(bizName || '').trim();
+  if (!name || name === 'ERPGEN') return;
+  const list = _getLocations();
+  const loc = list.find(l => l.url === url);
+  if (!loc) return;
+  let host = '';
+  try { host = new URL(url).hostname; } catch {}
+  if (loc.name !== host || loc.name === name) return;
+  loc.name = name;
+  _saveLocations(list);
+  _renderLocList();
+  if (typeof _renderStoreSheetIfOpen === 'function') _renderStoreSheetIfOpen();
+  _renderStartupChooserIfOpen();
+}
+
+function _escHtml(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+function _locHost(url) {
+  try { return new URL(url).host; } catch { return url; }
 }
 
 function _getLocations() {
@@ -65,6 +96,15 @@ function _locInitial(name) {
   const s = String(name || '').trim();
   return s ? s.charAt(0).toUpperCase() : '?';
 }
+// Avatar markup for a saved restaurant: its POS logo once its branding is
+// known (branding.js cache), else the colored monogram.
+function _locAvatarHtml(loc) {
+  const b = typeof getCachedBranding === 'function' ? getCachedBranding(loc.url) : null;
+  if (b && b.logo) {
+    return `<span class="loc-avatar loc-avatar-logo"><img src="${_escHtml(_blobUrlFor('avatar|' + loc.url, b.logo))}" alt="" decoding="async"></span>`;
+  }
+  return `<span class="loc-avatar" style="background:${_locColor(loc.name)}">${_escHtml(_locInitial(loc.name))}</span>`;
+}
 
 (function injectLocationPickerUI() {
   document.addEventListener('DOMContentLoaded', () => {
@@ -73,7 +113,9 @@ function _locInitial(name) {
       const btn = document.createElement('button');
       btn.id    = 'loc-settings-btn';
       btn.className = 'loc-avatar loc-settings-btn';
-      btn.onclick = openLocationModal;
+      // With restaurants saved, the chip opens the quick switcher sheet
+      // (store-switcher.js); with none, straight to the add/manage modal.
+      btn.onclick = () => (_getLocations().length ? openStoreSheet() : openLocationModal({ add: true }));
       topbar.prepend(btn);
       _renderSwitcherChip();
     }
@@ -83,14 +125,21 @@ function _locInitial(name) {
     modal.className = 'loc-modal';
     modal.innerHTML = `
       <div class="loc-modal-box">
-        <div class="loc-modal-title">CHOISIR UN RESTAURANT</div>
-        <div class="loc-modal-subtitle">Sélectionnez un POS ou ajoutez-en un nouveau.</div>
+        <div class="loc-modal-head">
+          <div>
+            <div class="loc-modal-title">MES RESTAURANTS</div>
+            <div class="loc-modal-subtitle">Renommez, partagez ou ajoutez un POS.</div>
+          </div>
+          <button class="loc-modal-x" onclick="closeLocationModal()" title="Fermer">✕</button>
+        </div>
 
         <div id="loc-list" class="loc-list"></div>
 
+        <button id="loc-add-toggle" class="loc-add-toggle" onclick="_expandAddSection()" style="display:none;">+ Ajouter un restaurant</button>
+
         <div id="loc-disconnect-row" style="display:none;"></div>
 
-        <div class="loc-add-section">
+        <div id="loc-add-section" class="loc-add-section">
           <div class="loc-section-label">Ajouter un restaurant</div>
 
           <div id="loc-scan-section" class="loc-scan-section" style="display:none;">
@@ -204,35 +253,162 @@ function _locSyncEnd(epoch) {
   if (btn && epoch === _locationEpoch) btn.classList.remove('loc-syncing');
 }
 
-// Wraps loadData() with the overlay above, holding it visible for a minimum
-// duration so a fast local response doesn't just flash the spinner. Only
-// waits for loadData()'s FAST "today" phase, not its much heavier full-
-// history phase (entire order table, needed for month nav — no fixed
-// lookback limit, see data-loader.js) — that continues in the background
-// after the overlay fades, same as it already did on the 60s auto-refresh
-// (now reflected by the switcher chip's sync dot instead of being invisible).
-// Waiting for the full phase here would mean every switch blocks on the
-// slowest possible query regardless of how little the user actually needs
-// right away. Returns whether the switch actually succeeded, so a failed
-// connection shows the red error state instead of quietly landing on
-// whatever (stale) data happened to already be on screen.
+// Renders a restored snapshot immediately, then refreshes it in the
+// background (topbar sync dot) unless it's only seconds old.
+// Also the cold-start path (app-init.js) for a snapshot read from disk.
+function _showRestoredStore(snap) {
+  const base = getApiBase();
+  const myEpoch = _locationEpoch;
+  const fresh = !snap.fromDisk && Date.now() - snap.lastLoadOkAt < STORE_SNAPSHOT_FRESH_MS;
+  _setLiveStatus(fresh ? 'ok' : 'refreshing');
+  renderToday();
+  renderSalaire();
+  renderRecette();
+  renderPage(currentPage);
+  if (fresh) {
+    _refreshMenuIfStale(base, myEpoch);
+    return;
+  }
+  _locSyncStart(myEpoch);
+  if (_storeIsLoading(base)) {
+    // Its background prefetch (startup chooser) is already on the wire —
+    // take that result instead of starting a duplicate download.
+    _prefetchStore(base).then(s => {
+      if (myEpoch !== _locationEpoch) return;
+      if (!s || s.fromDisk) { loadData(); return; }
+      _storeSnapshotRestore(base);
+      _setLiveStatus('ok');
+      renderToday(); renderSalaire(); renderRecette(); renderPage(currentPage);
+      _refreshMenuIfStale(base, myEpoch);
+    }).finally(() => _locSyncEnd(myEpoch));
+    return;
+  }
+  loadData().finally(() => _locSyncEnd(myEpoch));
+}
+
+// Opens the newly-activated restaurant (cp_api_url already set by
+// _activateLocation()). Three paths, fastest first:
+//   1. it has a snapshot (visited or prefetched this session) → instant;
+//   2. its background prefetch is mid-flight → overlay until that lands;
+//   3. otherwise → overlay around a full loadData().
+// The overlay is held for a minimum duration so a fast response doesn't
+// just flash it. Returns whether the switch succeeded. On failure, if the
+// restaurant we came from is still in memory, goes back to it rather than
+// leaving an empty dashboard for a POS that can't be reached.
 async function _switchWithTransition(name) {
+  const url = getApiBase();
+  const myEpoch = _locationEpoch;
+  // A tap right after launch can beat the on-device read (store-db.js) —
+  // wait for it (milliseconds) so the saved copy is used, not the network.
+  await _storeHydrateFromDisk();
+  if (myEpoch !== _locationEpoch) return false;
+  let snap = _storeSnapshotRestore(url);
+  if (snap) { _hideSwitchTransition(); _showRestoredStore(snap); return true; }
+
   const started = Date.now();
   _showSwitchTransition(name);
-  const ok = await new Promise(resolve => {
-    let done = false;
-    const finish = (success) => { if (!done) { done = true; resolve(success !== false); } };
-    loadData(finish).finally(finish);
-  });
+  let ok;
+  if (_storeIsLoading(url)) {
+    await _prefetchStore(url);
+    if (myEpoch !== _locationEpoch) return false; // switched again meanwhile
+    snap = _storeSnapshotRestore(url);
+    if (snap) _showRestoredStore(snap);
+    ok = !!snap;
+  }
+  if (!ok) {
+    ok = await new Promise(resolve => {
+      let done = false;
+      const finish = (success) => { if (!done) { done = true; resolve(success !== false); } };
+      loadData(finish).finally(finish);
+    });
+  }
+  if (myEpoch !== _locationEpoch) return false;
   const minShowMs = 450;
   const elapsed   = Date.now() - started;
   if (elapsed < minShowMs) await new Promise(r => setTimeout(r, minShowMs - elapsed));
   if (ok) {
     _hideSwitchTransition();
-  } else {
-    await _showSwitchError();
+    return true;
   }
-  return ok;
+  await _showSwitchError();
+  const prev = _prevLocationUrl;
+  const prevLoc = prev && _getLocations().find(l => l.url === prev);
+  if (myEpoch === _locationEpoch && prevLoc && _storeHasSnapshot(prev)) {
+    _activateLocation(prev);
+    _renderLocList();
+    await _switchWithTransition(prevLoc.name);
+    _showStatusToast(`${name} est injoignable — retour à ${prevLoc.name}`);
+  } else if (myEpoch === _locationEpoch) {
+    // Nothing to fall back to: clear the previous restaurant's numbers off
+    // every page (plain renders — no lazy history fetch against a dead POS)
+    // and offer the switcher so another restaurant is one tap away.
+    [renderToday, renderRapport, renderSalaire, renderMarchandise, renderRevenue, renderRecette]
+      .forEach(fn => { try { fn(); } catch (e) { console.error(e); } });
+    if (typeof openStoreSheet === 'function') openStoreSheet();
+  }
+  return false;
+}
+
+// Small transient message at the bottom of the screen (above the nav bar).
+let _statusToastTimer = null;
+function _showStatusToast(msg) {
+  let el = document.getElementById('loc-toast');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'loc-toast';
+    el.className = 'loc-toast';
+    document.body.appendChild(el);
+  }
+  el.textContent = msg;
+  el.classList.add('loc-toast-show');
+  clearTimeout(_statusToastTimer);
+  _statusToastTimer = setTimeout(() => el.classList.remove('loc-toast-show'), 3200);
+}
+
+// Manage-list row modes: at most one row is being renamed or awaiting a
+// remove confirmation at a time (index into cp_locations, or -1).
+let _locRenaming = -1;
+let _locConfirmRemove = -1;
+
+function _startRenameLocation(i) { _locRenaming = i; _locConfirmRemove = -1; _renderLocList(); }
+function _cancelRenameLocation() { _locRenaming = -1; _renderLocList(); }
+function _commitRenameLocation(i) {
+  const input = document.getElementById('loc-rename-input');
+  const name = input ? input.value.trim() : '';
+  const list = _getLocations();
+  if (name && list[i]) { list[i].name = name; _saveLocations(list); }
+  _locRenaming = -1;
+  _renderLocList();
+}
+function _askRemoveLocation(i) { _locConfirmRemove = i; _locRenaming = -1; _renderLocList(); }
+function _cancelRemoveLocation() { _locConfirmRemove = -1; _renderLocList(); }
+
+function _copyLocationShareLink(i, btn) {
+  const loc = _getLocations()[i];
+  if (!loc) return;
+  const link = `https://akhouzin.github.io/Stats-app/?add=${encodeURIComponent(loc.name)}&url=${encodeURIComponent(loc.url)}`;
+  const flash = txt => { if (btn) { btn.textContent = txt; setTimeout(() => { btn.textContent = '⤴'; }, 1500); } };
+  (navigator.clipboard ? navigator.clipboard.writeText(link) : Promise.reject())
+    .then(() => { flash('✓'); _showStatusToast('Lien de partage copié'); })
+    .catch(() => flash('✗'));
+}
+
+// The add form (QR scan + manual URL) is the modal's main content only while
+// nothing is saved yet; once restaurants exist it collapses behind a single
+// "+ Ajouter" button so the list itself is what the modal is about.
+let _locAddExpanded = false;
+function _syncAddSection(count) {
+  const sec = document.getElementById('loc-add-section');
+  const btn = document.getElementById('loc-add-toggle');
+  const collapsed = count > 0 && !_locAddExpanded;
+  if (sec) sec.classList.toggle('loc-add-collapsed', collapsed);
+  if (btn) btn.style.display = collapsed ? '' : 'none';
+}
+function _expandAddSection() {
+  _locAddExpanded = true;
+  _syncAddSection(_getLocations().length);
+  const sec = document.getElementById('loc-add-section');
+  if (sec) sec.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 function _renderLocList() {
@@ -249,29 +425,36 @@ function _renderLocList() {
   } else {
     el.innerHTML = list.map((loc, i) => {
       const isActive = loc.url === active;
-      const shareLink = `https://akhouzin.github.io/Stats-app/?add=${encodeURIComponent(loc.name)}&url=${encodeURIComponent(loc.url)}`;
+      const nameHtml = _locRenaming === i
+        ? `<input id="loc-rename-input" class="loc-rename-input" value="${_escHtml(loc.name)}"
+             onkeydown="if(event.key==='Enter')_commitRenameLocation(${i});if(event.key==='Escape')_cancelRenameLocation()">`
+        : `<div class="loc-item-name">${_escHtml(loc.name)}${isActive ? ' <span class="loc-item-badge">Actif</span>' : ''}</div>`;
+      const actions = _locRenaming === i
+        ? `<button onclick="_commitRenameLocation(${i})" class="loc-icon-btn loc-icon-ok" title="Enregistrer">✓</button>
+           <button onclick="_cancelRenameLocation()" class="loc-icon-btn" title="Annuler">✕</button>`
+        : _locConfirmRemove === i
+        ? `<button onclick="removeLocation(${i})" class="loc-btn-confirm-remove">Supprimer ?</button>
+           <button onclick="_cancelRemoveLocation()" class="loc-icon-btn" title="Annuler">✕</button>`
+        : `<button onclick="_startRenameLocation(${i})" class="loc-icon-btn" title="Renommer">✎</button>
+           <button onclick="_copyLocationShareLink(${i}, this)" class="loc-icon-btn" title="Copier le lien de partage">⤴</button>
+           <button onclick="_askRemoveLocation(${i})" class="loc-icon-btn loc-icon-danger" title="Supprimer">🗑</button>
+           ${isActive ? '' : `<button onclick="connectLocation(${i})" class="loc-btn-connect">Ouvrir</button>`}`;
       return `
         <div class="loc-item${isActive ? ' loc-item-active' : ''}">
           <div class="loc-item-row">
-            <span class="loc-avatar" style="background:${_locColor(loc.name)}">${_locInitial(loc.name)}</span>
+            ${_locAvatarHtml(loc)}
             <div class="loc-item-info">
-              <div class="loc-item-name">${loc.name}${isActive ? ' <span class="loc-item-badge">Actif</span>' : ''}</div>
-              <div class="loc-item-url">${loc.url}</div>
+              ${nameHtml}
+              <div class="loc-item-url">${_escHtml(_locHost(loc.url))}</div>
             </div>
-            <button onclick="connectLocation(${i})" class="loc-btn-connect${isActive ? ' loc-btn-active' : ''}">
-              ${isActive ? 'Actif' : 'Connecter'}
-            </button>
-            <button onclick="removeLocation(${i})" class="loc-btn-remove">✕</button>
           </div>
-          <div class="loc-share-row">
-            <input readonly value="${shareLink}" class="loc-share-input" onclick="this.select();" />
-            <button onclick="navigator.clipboard.writeText('${shareLink.replace(/'/g,"\\'")}').then(()=>{this.textContent='✓';setTimeout(()=>this.textContent='Copier lien',1500)})" class="loc-btn-copy">
-              Copier lien
-            </button>
-          </div>
+          <div class="loc-item-actions">${actions}</div>
         </div>`;
     }).join('');
+    const ri = document.getElementById('loc-rename-input');
+    if (ri) { ri.focus(); ri.select(); }
   }
+  _syncAddSection(list.length);
 
   // Disconnect button — only shown while an active connection exists, so the
   // user has a way back to the neutral/no-POS screen without deleting any of
@@ -281,7 +464,7 @@ function _renderLocList() {
     discRow.style.display = active ? 'block' : 'none';
     discRow.innerHTML = active ? `
       <button onclick="disconnectLocation()" class="loc-disconnect-btn">
-        🔌 Se déconnecter — revenir à l'écran par défaut
+        🔌 Se déconnecter
       </button>` : '';
   }
 
@@ -305,6 +488,14 @@ function _renderSwitcherChip() {
     btn.style.background = '';
     btn.textContent = '⚙';
     btn.title = 'Choisir un restaurant';
+  }
+  // The topbar business name doubles as the switcher (▾) once there is
+  // more than one restaurant to switch between.
+  const center = document.querySelector('.topbar-center');
+  if (center) {
+    const multi = _getLocations().length > 1;
+    center.classList.toggle('topbar-switchable', multi);
+    center.onclick = multi ? openStoreSheet : null;
   }
 }
 
@@ -341,6 +532,28 @@ function _hideDisconnectedScreen() {
 // restaurants should offer to pick a different one, not just go neutral).
 // ═══════════════════════════════════════
 
+// One-line live status for a saved restaurant, shared by the startup
+// chooser and the store sheet (store-switcher.js): today's totals once its
+// data is in memory, else whether it's loading / unreachable.
+function _locStatusHtml(loc) {
+  const sum    = _storeTodaySummary(loc.url);
+  const health = _storeHealthOf(loc.url);
+  if (_storeIsLoading(loc.url) && !sum) return `<span class="loc-st loc-st-loading">Chargement…</span>`;
+  if (health && !health.ok) return `<span class="loc-st loc-st-off">Injoignable</span>`;
+  if (sum) {
+    const total = Math.round(sum.total).toLocaleString('fr-MA');
+    // Last-known figures (from the device cache) are dimmed and stamped
+    // with their time until the live refresh lands.
+    // (shorter wording when stale so the time still fits a phone-width row)
+    if (sum.stale) {
+      const when = sum.at ? ` · ${_fmtSyncTime(sum.at)}` : '';
+      return `<span class="loc-st loc-st-stale">${sum.count} cmd · ${total} Dhs${when}</span>`;
+    }
+    return `<span class="loc-st loc-st-on">${sum.count} cmd · ${total} Dhs aujourd'hui</span>`;
+  }
+  return `<span class="loc-st">${_escHtml(_locHost(loc.url))}</span>`;
+}
+
 function _renderStartupChooser() {
   const list   = _getLocations();
   const active = localStorage.getItem('cp_api_url') || '';
@@ -348,18 +561,29 @@ function _renderStartupChooser() {
   if (!el) return;
   el.innerHTML = list.map((loc, i) => `
     <button class="sc-item" onclick="_chooseStartupLocation(${i})">
-      <span class="loc-avatar" style="background:${_locColor(loc.name)}">${_locInitial(loc.name)}</span>
+      ${_locAvatarHtml(loc)}
       <span class="sc-item-info">
-        <span class="sc-item-name">${loc.name}</span>
-        <span class="sc-item-url">${loc.url}</span>
+        <span class="sc-item-name">${_escHtml(loc.name)}${loc.url === active ? ' <span class="sc-item-last">Dernier</span>' : ''}</span>
+        <span class="sc-item-url">${_locStatusHtml(loc)}</span>
       </span>
-      ${loc.url === active ? '<span class="sc-item-last">Dernier</span>' : ''}
       <span class="sc-item-arrow">›</span>
     </button>
   `).join('');
 }
 
+function _isChoosingStore() {
+  const screen = document.getElementById('startup-chooser-screen');
+  return !!screen && screen.style.display === 'flex';
+}
+function _renderStartupChooserIfOpen() {
+  if (_isChoosingStore()) _renderStartupChooser();
+}
+
 function _showStartupChooser() {
+  // Warm every saved restaurant while the user is still deciding — the one
+  // they tap is then usually already in memory (instant open), and each row
+  // fills in with today's totals as its data lands.
+  _prefetchOtherStores({ includeActive: true });
   _renderStartupChooser();
   const screen = document.getElementById('startup-chooser-screen');
   const disc   = document.getElementById('disconnected-screen');
@@ -417,12 +641,17 @@ function _setScanMsg(msg) {
   el.style.display = msg ? 'flex' : 'none';
 }
 
-function openLocationModal() {
+// opts.add — open with the add form already expanded (store sheet's "+ Ajouter").
+function openLocationModal(opts) {
   stopQRScan();
+  if (typeof closeStoreSheet === 'function') closeStoreSheet();
   document.getElementById('loc-url-input').value  = '';
   document.getElementById('loc-name-input').value = '';
   _setLocResult('');
   _setScanMsg('');
+  _locRenaming = -1;
+  _locConfirmRemove = -1;
+  _locAddExpanded = !!(opts && opts.add);
   _renderLocList();
   document.getElementById('loc-modal').classList.add('loc-modal-open');
 }
@@ -445,10 +674,23 @@ async function connectLocation(i) {
 function removeLocation(i) {
   const list = _getLocations();
   const active = localStorage.getItem('cp_api_url') || '';
-  if (list[i] && list[i].url === active) _deactivateLocation();
+  const removed = list[i];
+  if (!removed) return;
+  const wasActive = removed.url === active;
+  if (wasActive) _deactivateLocation();
+  _storeForget(removed.url);
   list.splice(i, 1);
   _saveLocations(list);
+  _locConfirmRemove = -1;
   _renderLocList();
+  // Removing the restaurant on screen must not leave its numbers up under a
+  // neutral topbar — same end state as an explicit disconnect.
+  if (wasActive) {
+    loadStatsBranding();
+    if (list.length > 1) { closeLocationModal(); _showStartupChooser(); }
+    else if (list.length === 1) { closeLocationModal(); connectLocation(0); }
+    else _showDisconnectedScreen();
+  }
 }
 
 async function addLocation() {

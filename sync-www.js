@@ -9,6 +9,7 @@ const DEST = path.join(__dirname, 'www');
 const INCLUDE = [
   'index.html',
   'logo.png',
+  'sw.js',
 ];
 const INCLUDE_DIRS = ['app', 'styles'];
 

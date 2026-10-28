@@ -1,37 +1,121 @@
 // ═══════════════════════════════════════
 // LOAD DATA
 // ═══════════════════════════════════════
-async function loadLocalData() {
-  const [salStaff, salDays, menuData, charges, chargeDays, marcCats, marcArts, marcAchats, marcLinks] = await Promise.all([
-    apiGet('/api/sal/staff'),
-    apiGet('/api/sal/days'),
-    apiGet('/api/menu-items'),
-    apiGet('/api/rec/charges'),
-    apiGet('/api/rec/charge-days'),
-    fetchMarcCategories(),
-    fetchMarcArticles(),
-    fetchMarcAchats(),
-    fetchMarcLinks(),
+
+// Small per-POS datasets (salary, charges, marchandise) — a few KB each, so
+// they're simply re-fetched on every refresh. Takes an explicit base so
+// store-cache.js can prefetch a restaurant that isn't the active one.
+async function _fetchSmallData(base) {
+  const [salStaff, salDays, charges, chargeDays, marcCats, marcArts, marcAchats, marcLinks] = await Promise.all([
+    apiGetFrom(base, '/api/sal/staff'),
+    apiGetFrom(base, '/api/sal/days'),
+    apiGetFrom(base, '/api/rec/charges'),
+    apiGetFrom(base, '/api/rec/charge-days'),
+    apiGetFrom(base, '/api/marc/categories'),
+    apiGetFrom(base, '/api/marc/articles'),
+    apiGetFrom(base, '/api/marc/achats'),
+    apiGetFrom(base, '/api/marc/links'),
   ]);
-  _marcCategories = marcCats;
-  _marcArticles   = marcArts;
-  _marcAchats     = marcAchats;
-  _marcLinks      = marcLinks;
-  _salStaff = salStaff;
-  _salDays = {};
+  const salDaysMap = {};
   salDays.forEach(d => {
-    if (!_salDays[d.staff_id]) _salDays[d.staff_id] = {};
-    _salDays[d.staff_id][d.day_key] = d.status;
+    if (!salDaysMap[d.staff_id]) salDaysMap[d.staff_id] = {};
+    salDaysMap[d.staff_id][d.day_key] = d.status;
   });
-  if (menuData.length > 0)
-    menuItems = menuData.map(i => ({ id: i.id, name: i.name, cat: i.cat, price: i.price, image: i.image || '' }));
-  _charges = charges;
-  _chargeDays = {};
+  const chargeDaysMap = {};
   chargeDays.forEach(r => {
-    if (!_chargeDays[r.charge_id]) _chargeDays[r.charge_id] = {};
-    _chargeDays[r.charge_id][r.day_key] = r.amount;
+    if (!chargeDaysMap[r.charge_id]) chargeDaysMap[r.charge_id] = {};
+    chargeDaysMap[r.charge_id][r.day_key] = r.amount;
   });
+  return {
+    salStaff, salDays: salDaysMap, charges, chargeDays: chargeDaysMap,
+    marcCategories: marcCats, marcArticles: marcArts, marcAchats, marcLinks,
+  };
 }
+
+const _EMPTY_SMALL_STATE = {
+  salStaff: [], salDays: {}, charges: [], chargeDays: {},
+  marcCategories: [], marcArticles: [], marcAchats: [], marcLinks: [],
+};
+
+function _assignSmallState(s) {
+  _salStaff       = s.salStaff;
+  _salDays        = s.salDays;
+  _charges        = s.charges;
+  _chargeDays     = s.chargeDays;
+  _marcCategories = s.marcCategories;
+  _marcArticles   = s.marcArticles;
+  _marcAchats     = s.marcAchats;
+  _marcLinks      = s.marcLinks;
+}
+
+function _currentSmallState() {
+  return {
+    salStaff: _salStaff, salDays: _salDays, charges: _charges, chargeDays: _chargeDays,
+    marcCategories: _marcCategories, marcArticles: _marcArticles, marcAchats: _marcAchats, marcLinks: _marcLinks,
+  };
+}
+
+// ── Menu ──
+// /api/menu-items embeds every article's photo as a base64 data URI —
+// measured 1.3–1.6 MB per shop over the tunnel (8 s on a slow one), and it
+// used to be re-downloaded on EVERY 60 s refresh and awaited before anything
+// rendered. Only page-today.js's photos and page-daily.js/page-revenue.js's
+// category grouping read it, and a menu barely changes during a day — so it
+// now loads off the critical path (pages render first, then re-render once it
+// lands) and is only re-fetched once MENU_TTL_MS has passed. It's also kept
+// on the device with the rest of the snapshot (store-db.js), so photos show
+// on the very first frame of the next app open; when a cached copy exists the
+// re-check waits MENU_RECHECK_DELAY_MS so it never competes with the live
+// numbers for bandwidth, and an unchanged menu doesn't re-render anything.
+const MENU_TTL_MS = 30 * 60 * 1000;
+const MENU_RECHECK_DELAY_MS = 6000;
+let _menuFetchedAt = 0;   // 0 = never fetched for the active POS
+let _menuInFlight  = false;
+
+function _menuSignature(list) {
+  let n = 0;
+  for (const m of list) n += (m.image ? m.image.length : 0) + m.name.length + Number(m.price || 0);
+  return list.length + ':' + n;
+}
+
+function _refreshMenuIfStale(base, myEpoch) {
+  if (_menuInFlight || (_menuFetchedAt && Date.now() - _menuFetchedAt < MENU_TTL_MS)) return;
+  _menuInFlight = true;
+  const delay = menuItems.length ? MENU_RECHECK_DELAY_MS : 0;
+  new Promise(r => setTimeout(r, delay))
+    .then(() => {
+      if (myEpoch !== _locationEpoch) throw new Error('stale');
+      return apiGetFrom(base, '/api/menu-items');
+    })
+    .then(menuData => {
+      const mapped = menuData.map(i => ({ id: i.id, name: i.name, cat: i.cat, price: i.price, image: i.image || '' }));
+      if (myEpoch !== _locationEpoch) {
+        // Switched away mid-download — hand the (expensive) result to that
+        // restaurant's snapshot instead of discarding it, so going back
+        // doesn't download it again.
+        const snap = typeof _storeSnapshots !== 'undefined' && _storeSnapshots.get(base);
+        if (snap) {
+          snap.menuItems = mapped;
+          snap.menuFetchedAt = Date.now();
+          if (!snap.fromDisk) _storeSchedulePersist(base);
+        }
+        return;
+      }
+      _menuFetchedAt = Date.now();
+      if (_menuSignature(mapped) !== _menuSignature(menuItems)) {
+        menuItems = mapped;
+        _ordersStamp++; // page-revenue.js's stamp guard — its category split reads the menu
+        if (historyLoaded) renderPage(currentPage);
+      }
+      if (typeof _storeSnapshotSave === 'function') _storeSnapshotSave(base);
+    })
+    .catch(e => { if (e.message !== 'stale') console.error('[menu] load failed', e); })
+    .finally(() => { if (myEpoch === _locationEpoch) _menuInFlight = false; });
+}
+// `_cancelKey` keeps the raw (server-side) day key next to the parsed Date so
+// an incremental refresh can re-apply a newer cancellation list to orders it
+// already holds without re-deriving the key from a timezone-shifted Date.
+function _orderKey(o) { return `${o.num}|${o._cancelKey}`; }
 
 function mapOrders(raw, cancelledKeys) {
   return raw
@@ -40,7 +124,10 @@ function mapOrders(raw, cancelledKeys) {
       const dayKey = r.time ? String(r.time).substring(0, 10) : '';
       return !cancelledKeys.has(`${r.num}|${dayKey}`);
     })
-    .map(r => ({ num: r.num, items: r.items, total: r.total, time: new Date(r.time), server: r.server || '—' }));
+    .map(r => ({
+      num: r.num, items: r.items, total: r.total, time: new Date(r.time), server: r.server || '—',
+      _cancelKey: r.time ? String(r.time).substring(0, 10) : '',
+    }));
 }
 
 // ── Lazy render: only render the page the user is currently on ──
@@ -146,13 +233,11 @@ const HISTORY_EXTEND_CHUNK_MONTHS = 6;
 // Oldest date currently covered by allOrders. Once extended backward (by a
 // Recette navigation, or a Rapport/Revenue tab-open, past the default
 // window), this must never move forward again for the life of the session —
-// loadData()'s periodic refresh re-fetches from THIS boundary, not the
-// default window, precisely so a user looking at month -18 doesn't have
-// that data silently vanish out from under them on the next 60s
-// auto-refresh. The cost of that is real (the periodic refresh re-fetches
-// however far back the session has ever gone) but it's proportional to what
-// this specific session actually looked at, not to the store's total
-// lifetime order count.
+// loadData()'s FULL refresh (every FULL_REFRESH_MS) re-fetches from THIS
+// boundary, not the default window, precisely so a user looking at month -18
+// doesn't have that data silently vanish out from under them. The 60 s
+// refreshes in between only re-fetch the last INCREMENTAL_LOOKBACK_DAYS and
+// keep everything older as-is — see loadData().
 let _historyLoadedFrom = null;
 
 let _cancelledKeysCache = null;   // reused by ensureOrdersLoadedThrough() — avoids its own /api/cancelled round trip
@@ -217,6 +302,7 @@ async function ensureOrdersLoadedThrough(targetDate, padMonths = HISTORY_EXTEND_
   // to the OLD restaurant) must be discarded rather than concat()'d onto the
   // NEW restaurant's allOrders.
   const myEpoch = _locationEpoch;
+  const base = getApiBase();
 
   // Lights the topbar switcher chip's sync dot for as long as this
   // on-demand backward extension is in flight — see location-picker.js's
@@ -232,12 +318,13 @@ async function ensureOrdersLoadedThrough(targetDate, padMonths = HISTORY_EXTEND_
     const prevStatus = statusEl ? statusEl.textContent : null;
     if (statusEl) statusEl.textContent = "Chargement de l'historique…";
     try {
-      const raw = await fetchOrdersRange(gapStart, gapEnd);
+      const raw = await fetchOrdersRange(gapStart, gapEnd, base);
       if (myEpoch !== _locationEpoch) return; // stale — a different POS is now active
       const olderOrders = mapOrders(raw, _cancelledKeysCache || new Set());
       allOrders = allOrders.concat(olderOrders);
       _historyLoadedFrom = gapStart;
       _ordersStamp++;
+      if (typeof _storeSnapshotSave === 'function') _storeSnapshotSave(base);
     } finally {
       if (statusEl) statusEl.textContent = prevStatus;
       _historyExtendPromise = null;
@@ -247,84 +334,188 @@ async function ensureOrdersLoadedThrough(targetDate, padMonths = HISTORY_EXTEND_
   return _historyExtendPromise;
 }
 
-// Fetches everything the eager default window covers (the current month,
-// give or take page-today.js's lookback floor — see _historyWindowStart())
-// before the dashboard renders, so it never shows a narrower "today only"
-// preview that gets silently upgraded moments later. Older history
-// (previous months, Revenue's trend) stays lazy — see
-// ensureOrdersLoadedThrough() above. onTodayReady is called with
-// `true`/`false` (whether this load actually succeeded) so a caller
-// mid-switch (location-picker.js:_switchWithTransition()) can tell a failed
-// connection apart from a real one instead of silently showing the
-// dashboard either way — the stale-epoch bail-out below calls it with no
-// argument, since that only ever belongs to a request that's since been
-// superseded by a newer switch, not to a switch still waiting on a result.
+// ═══════════════════════════════════════
+// LOAD / REFRESH
+// ═══════════════════════════════════════
+// Fetches the active POS's data and renders it. Everything the first paint
+// needs — orders, cancellations, the small datasets and branding (getDayKey()
+// depends on its day-cycle hour) — goes out in ONE parallel wave. The old
+// two-wave split (small stuff first, orders after) existed to keep an
+// HTTP/1.1 connection pool free for the orders payload, but in practice the
+// first wave included the 1.3–1.6 MB menu, so the orders request sat idle
+// behind it for up to 8 s on every switch. The menu is now off the critical
+// path entirely (_refreshMenuIfStale()), and the remaining requests are tiny.
 //
-// Split into two sequential waves rather than one single Promise.all of
-// everything: loadLocalData() alone fans out to 10 concurrent requests, and
-// most browsers cap concurrent requests per origin around 6 (HTTP/1.1) —
-// throwing the orders fetch (by far the largest single payload here, and
-// the one most likely to be slow on a POS with substantial order history)
-// into that same 11-wide burst let it get queued behind/interleaved with
-// 10 much smaller requests, and vice versa, so even the small ones could
-// end up waiting on a connection slot. Fetching the small stuff first, then
-// the orders range on its own, keeps each wave's peak concurrency lower and
-// gives the potentially-large request the connection pool to itself —
-// without changing the "nothing renders until the current month is fully
-// loaded" guarantee, since both waves are still awaited before anything
-// below runs.
-async function loadData(onTodayReady) {
-  if (!getApiBase()) { if (typeof onTodayReady === 'function') onTodayReady(); return; }
-  loadStatsBranding();
-  // Snapshot which POS connection this call belongs to. Switching restaurants
-  // (location-picker.js:_activateLocation()/_deactivateLocation()) bumps
-  // _locationEpoch — if that happens while THIS call is still awaiting a
-  // response (e.g. a straggling 60s auto-refresh from the restaurant the
-  // user just switched AWAY from, or an overlapping switch-to-switch race),
-  // every check below stops it from overwriting allOrders/menuItems/etc with
-  // the wrong restaurant's data once it finally resolves. This was the cause
-  // of switching restaurants sometimes showing a mix of both, or the
-  // previous one's numbers, instead of the one just selected.
-  const myEpoch = _locationEpoch;
-  try {
-    // Never shrink back to the default window once extended — see
-    // _historyLoadedFrom's comment above for why.
-    const defaultStart = _historyWindowStart();
-    const windowStart = (_historyLoadedFrom && _historyLoadedFrom < defaultStart)
-      ? _historyLoadedFrom
-      : defaultStart;
+// Two refresh depths:
+//   full        — the whole loaded window (current month by default, or
+//                 however far back _historyLoadedFrom has been extended).
+//                 First load of a POS, then every FULL_REFRESH_MS.
+//   incremental — only the last INCREMENTAL_LOOKBACK_DAYS, merged over what's
+//                 already held. Every other 60 s tick — a busy shop's month
+//                 of orders is ~150–200 KB gzipped, re-downloaded every minute
+//                 before this.
+//
+// onTodayReady(true/false) reports whether the load succeeded so a caller
+// mid-switch (location-picker.js:_switchWithTransition()) can tell a failed
+// connection from a real one; it's called with no argument when the result
+// was discarded because a different POS became active meanwhile.
+const FULL_REFRESH_MS = 10 * 60 * 1000;
+const INCREMENTAL_LOOKBACK_DAYS = 2; // ≥ 1 business day of slack past midnight + the day-cycle shift
+const AUTO_REFRESH_MS = 60000;
 
-    const [cancelledData] = await Promise.all([
-      apiGet('/api/cancelled'),
-      loadLocalData(),
-    ]);
-    if (myEpoch !== _locationEpoch) { if (typeof onTodayReady === 'function') onTodayReady(); return; }
-    const allRaw = await fetchOrdersRange(windowStart, _farFutureCutoff());
-    if (myEpoch !== _locationEpoch) { if (typeof onTodayReady === 'function') onTodayReady(); return; }
+let _lastFullLoadAt = 0;   // when the active POS last had a full (non-incremental) refresh
+let _lastLoadOkAt   = 0;   // when the active POS last answered at all — drives the live-status text
+let _loadInFlight = null;
+let _loadInFlightEpoch = -1;
 
-    const cancelledKeys = new Set(cancelledData.map(r => `${r.num}|${r.dateKey}`));
-    _cancelledKeysCache = cancelledKeys;
-    allOrders = mapOrders(allRaw, cancelledKeys);
-    _historyLoadedFrom = windowStart;
-    _ordersStamp++;
-    historyLoaded = true;
+function _incrementalStart() {
+  const d = new Date();
+  d.setDate(d.getDate() - INCREMENTAL_LOOKBACK_DAYS);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
 
-    document.getElementById('live-status').textContent = 'En ligne';
-    renderToday();
-    renderSalaire();
-    renderRecette();
-    if (typeof onTodayReady === 'function') onTodayReady(true);
+// "19:22" for today, "27/10 19:22" for an older moment (a device-cached
+// snapshot can be days old).
+function _fmtSyncTime(ms) {
+  const d = new Date(ms);
+  const hhmm = d.toLocaleTimeString('fr-MA', { hour: '2-digit', minute: '2-digit' });
+  return d.toDateString() === new Date().toDateString()
+    ? hhmm
+    : `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')} ${hhmm}`;
+}
 
-    renderPage(currentPage);
-
-  } catch (e) {
-    console.error(e);
-    if (myEpoch === _locationEpoch) document.getElementById('live-status').textContent = 'Erreur connexion';
-    if (typeof onTodayReady === 'function') onTodayReady(false);
+// kind: 'ok' | 'refreshing' (last-known data on screen, live load running) | 'error'
+function _setLiveStatus(kind) {
+  const el  = document.getElementById('live-status');
+  const dot = document.querySelector('.live-dot');
+  const when = _lastLoadOkAt ? _fmtSyncTime(_lastLoadOkAt) : '';
+  if (dot) {
+    dot.classList.toggle('live-dot-off', kind === 'error');
+    dot.classList.toggle('live-dot-sync', kind === 'refreshing');
+  }
+  document.body.classList.toggle('data-stale', kind !== 'ok' && historyLoaded);
+  if (!el) return;
+  if (kind === 'ok') {
+    el.textContent = 'En ligne';
+    el.title = 'Mis à jour à ' + when;
+  } else if (kind === 'refreshing') {
+    el.textContent = 'Mise à jour…';
+    el.title = when ? 'Données affichées : ' + when : '';
+  } else {
+    // With data already on screen, say how old it is rather than implying it's gone.
+    el.textContent = historyLoaded && when ? 'Hors ligne · ' + when : 'Erreur connexion';
+    el.title = '';
   }
 }
 
-// ═══════════════════════════════════════
-// AUTO REFRESH every 60s
-// ═══════════════════════════════════════
-setInterval(loadData, 60000);
+// Third, lightest depth — `quick` (live-refresh.js, every QUICK_REFRESH_MS
+// while visible): only the last QUICK_LOOKBACK_HOURS of orders + the
+// cancellation list, merged like an incremental load. A few KB, so a sale
+// rung up at the till shows within seconds instead of up to a minute later.
+// The lookback is hours, not "since the newest order I hold", because an
+// order's `time` is when it was opened — a table can be mirrored long after.
+// Nothing is re-rendered when the slice came back identical.
+const QUICK_LOOKBACK_HOURS = 3;
+let _lastDeepLoadAt = 0; // last successful full/incremental load (quick ticks don't count)
+
+// Order count + revenue + cancellation count of everything newer than `from`
+// (allOrders is newest-first, so this stops at the first older order).
+function _sliceSig(list, from, cancelledCount) {
+  let n = 0, sum = 0, nums = 0;
+  for (const o of list) {
+    if (o.time < from) break;
+    n++; sum += Number(o.total) || 0; nums += Number(o.num) || 0;
+  }
+  return `${n}|${sum.toFixed(2)}|${nums}|${cancelledCount}`;
+}
+
+async function loadData(onTodayReady, { full = false, quick = false } = {}) {
+  const done = ok => { if (typeof onTodayReady === 'function') onTodayReady(ok); };
+  const base = getApiBase();
+  if (!base) { done(); return; }
+  const myEpoch = _locationEpoch;
+  // A load for this same POS is already on the wire (a tick overlapping a
+  // slow previous one, or a resume racing the interval) — join it instead
+  // of stacking a duplicate request.
+  if (_loadInFlight && _loadInFlightEpoch === myEpoch) { done(await _loadInFlight); return; }
+  const mode = full ? 'full' : (quick && historyLoaded ? 'quick' : 'auto');
+  const p = _loadDataImpl(base, myEpoch, mode);
+  _loadInFlight = p;
+  _loadInFlightEpoch = myEpoch;
+  try {
+    done(await p);
+  } finally {
+    if (_loadInFlight === p) _loadInFlight = null;
+  }
+}
+
+async function _loadDataImpl(base, myEpoch, mode) {
+  const quick = mode === 'quick';
+  const incremental = !quick && historyLoaded && mode !== 'full' && (Date.now() - _lastFullLoadAt) < FULL_REFRESH_MS;
+  // Never shrink back to the default window once extended — see
+  // _historyLoadedFrom's comment above for why.
+  const defaultStart = _historyWindowStart();
+  const windowStart = (_historyLoadedFrom && _historyLoadedFrom < defaultStart) ? _historyLoadedFrom : defaultStart;
+  const fetchFrom = quick
+    ? new Date(Date.now() - QUICK_LOOKBACK_HOURS * 3600000)
+    : (incremental ? _incrementalStart() : windowStart);
+
+  if (!quick) _refreshMenuIfStale(base, myEpoch);
+
+  try {
+    const [cancelledData, small, raw] = await Promise.all([
+      apiGetFrom(base, '/api/cancelled'),
+      quick ? null : _fetchSmallData(base),
+      fetchOrdersRange(fetchFrom, _farFutureCutoff(), base),
+      quick ? null : loadStatsBranding(), // epoch-guarded itself, never throws
+    ]);
+    if (myEpoch !== _locationEpoch) return undefined; // stale — a different POS is now active
+
+    const cancelledKeys = new Set(cancelledData.map(r => `${r.num}|${r.dateKey}`));
+    const prevCancelledCount = _cancelledKeysCache ? _cancelledKeysCache.size : -1;
+    const before = _sliceSig(allOrders, fetchFrom, prevCancelledCount);
+    _cancelledKeysCache = cancelledKeys;
+    if (small) _assignSmallState(small);
+    const fresh = mapOrders(raw, cancelledKeys);
+    if (quick || incremental) {
+      // Keep what's older than the re-fetched slice, minus anything that has
+      // since been cancelled or re-sent in `fresh` (a boundary order).
+      const freshKeys = new Set(fresh.map(_orderKey));
+      const kept = allOrders.filter(o => o.time < fetchFrom && !freshKeys.has(_orderKey(o)) && !cancelledKeys.has(_orderKey(o)));
+      allOrders = fresh.concat(kept);
+    } else {
+      allOrders = fresh;
+      _historyLoadedFrom = windowStart;
+      _lastFullLoadAt = Date.now();
+    }
+    const changed = !quick || _sliceSig(allOrders, fetchFrom, cancelledKeys.size) !== before;
+    historyLoaded = true;
+    _lastLoadOkAt = Date.now();
+    if (!quick) _lastDeepLoadAt = _lastLoadOkAt;
+    _setLiveStatus('ok');
+
+    if (changed) {
+      _ordersStamp++;
+      renderToday();
+      renderSalaire();
+      renderRecette();
+      renderPage(currentPage);
+      if (typeof _onLiveDataChanged === 'function') _onLiveDataChanged();
+    }
+    if (changed) {
+      if (typeof _storeSnapshotSave === 'function') _storeSnapshotSave(base);
+    } else if (typeof _storeTouch === 'function') {
+      _storeTouch(base, _lastLoadOkAt); // nothing new — just "still live as of now"
+    }
+    if (!quick && typeof _prefetchOtherStores === 'function') _prefetchOtherStores();
+    return true;
+  } catch (e) {
+    console.error(e);
+    if (myEpoch !== _locationEpoch) return undefined;
+    _setLiveStatus('error');
+    if (typeof _storeMarkError === 'function') _storeMarkError(base);
+    return false;
+  }
+}
+// Refresh scheduling (ticks, resume, pull-to-refresh) lives in live-refresh.js.

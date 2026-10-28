@@ -17,6 +17,7 @@
 const _MST_TARGET_DAYS = 7;          // suggested purchase covers this many days
 let _mstHistoryTarget = null;        // earliest date already requested from the loader
 let _mstFilter = 'all';              // 'all' | 'order'
+let _mstLastRows = null;             // last computed rows — kpi-details-defs.js's Stock card details
 
 function _mstEsc(s) {
   return String(s == null ? '' : s).replace(/[&<>"']/g, c =>
@@ -97,6 +98,7 @@ function renderMarchStock() {
     };
   });
 
+  _mstLastRows = rows; // read by kpi-details-defs.js when a Stock card is tapped
   const toOrder = rows.filter(r => r.st && (r.st.status === 'out' || r.st.status === 'low'));
   const outCount = rows.filter(r => r.st && r.st.status === 'out').length;
   const lowCount = rows.filter(r => r.st && r.st.status === 'low').length;
@@ -110,10 +112,10 @@ function renderMarchStock() {
 
   const kpis = `
     <div class="kpi-grid">
-      <div class="kpi"><div class="kpi-label">Articles suivis</div><div class="kpi-value">${tracked.length}</div><div class="kpi-sub">${unlinked > 0 ? `${unlinked} non liés` : 'tous liés'}</div></div>
-      <div class="kpi"><div class="kpi-label">À commander</div><div class="kpi-value${toOrder.length ? ' red' : ' green'}">${ready ? toOrder.length : '…'}</div><div class="kpi-sub">pour ${_MST_TARGET_DAYS} jours</div></div>
-      <div class="kpi"><div class="kpi-label">En rupture</div><div class="kpi-value">${ready ? outCount : '…'}</div><div class="kpi-sub">stock ≤ 0</div></div>
-      <div class="kpi"><div class="kpi-label">Stock faible</div><div class="kpi-value">${ready ? lowCount : '…'}</div><div class="kpi-sub">&lt; ${_MINV_LOW_DAYS} j de stock</div></div>
+      <div class="kpi" data-kpi="mst-tracked"><div class="kpi-label">Articles suivis</div><div class="kpi-value">${tracked.length}</div><div class="kpi-sub">${unlinked > 0 ? `${unlinked} non liés` : 'tous liés'}</div></div>
+      <div class="kpi" data-kpi="mst-order"><div class="kpi-label">À commander</div><div class="kpi-value${toOrder.length ? ' red' : ' green'}">${ready ? toOrder.length : '…'}</div><div class="kpi-sub">pour ${_MST_TARGET_DAYS} jours</div></div>
+      <div class="kpi" data-kpi="mst-out"><div class="kpi-label">En rupture</div><div class="kpi-value">${ready ? outCount : '…'}</div><div class="kpi-sub">stock ≤ 0</div></div>
+      <div class="kpi" data-kpi="mst-low"><div class="kpi-label">Stock faible</div><div class="kpi-value">${ready ? lowCount : '…'}</div><div class="kpi-sub">&lt; ${_MINV_LOW_DAYS} j de stock</div></div>
     </div>`;
 
   const orderCard = !ready ? '' : toOrder.length ? `
@@ -167,4 +169,6 @@ function renderMarchStock() {
       ${list}
       ${noPurchase ? `<div class="mst-note">${noPurchase} article${noPurchase > 1 ? 's' : ''} suivi${noPurchase > 1 ? 's' : ''} sans aucun achat enregistré — le stock commence au premier achat.</div>` : ''}
     </div>`;
+  // The grid was just rebuilt: mark its cards tappable and re-attach an open detail panel.
+  if (typeof _kdMarkExpandable === 'function') { _kdMarkExpandable(host); _kdRefresh(); }
 }

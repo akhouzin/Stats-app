@@ -109,12 +109,51 @@ function _applyStatsThemeVars(theme) {
   styleEl.textContent = css;
 }
 
+// data: URI → object URL, cached per key. The POS ships logos and menu photos
+// as base64 data URIs (30–90 KB each); putting those straight into src=""
+// via innerHTML meant every re-render re-parsed megabytes of text (one copy
+// per order line on the Commandes list). A short blob: URL is decoded once.
+const _blobUrls = new Map(); // key → { src, url }
+function _blobUrlFor(key, dataUrl) {
+  if (!dataUrl || !dataUrl.startsWith('data:')) return dataUrl || '';
+  const hit = _blobUrls.get(key);
+  if (hit && hit.src === dataUrl) return hit.url;
+  try {
+    const comma = dataUrl.indexOf(',');
+    const meta  = dataUrl.slice(5, comma);
+    const mime  = meta.split(';')[0] || 'application/octet-stream';
+    let blob;
+    if (meta.includes(';base64')) {
+      const bin = atob(dataUrl.slice(comma + 1));
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      blob = new Blob([bytes], { type: mime });
+    } else {
+      blob = new Blob([decodeURIComponent(dataUrl.slice(comma + 1))], { type: mime });
+    }
+    if (hit) URL.revokeObjectURL(hit.url);
+    const url = URL.createObjectURL(blob);
+    _blobUrls.set(key, { src: dataUrl, url });
+    return url;
+  } catch {
+    return dataUrl;
+  }
+}
+
+let _appliedBrandingKey = null;
 function applyStatsBranding(data) {
   const b = data || _STATS_DEFAULT_BRANDING;
-  document.title = (b.name || _STATS_DEFAULT_BRANDING.name) + ' — Stats';
   _statsDayCycleStartHour = Number(b.dayCycleStartHour) || 0;
   _statsBrandFont = (b.theme && b.theme.brand_font) || '';
 
+  // Re-applied on every refresh and switch — skip the DOM work (and the logo
+  // re-decode / theme <style> rewrite, which made the topbar flicker) when
+  // nothing actually changed.
+  const key = JSON.stringify([b.name, b.tagline, (b.logo || '').length, b.logo ? b.logo.slice(-64) : '', b.theme]);
+  if (key === _appliedBrandingKey) return;
+  _appliedBrandingKey = key;
+
+  document.title = (b.name || _STATS_DEFAULT_BRANDING.name) + ' — Stats';
   const nameEl = document.getElementById('topbar-biz-name');
   const subEl  = document.getElementById('topbar-biz-sub');
   if (nameEl) nameEl.textContent = b.name    || _STATS_DEFAULT_BRANDING.name;
@@ -122,29 +161,115 @@ function applyStatsBranding(data) {
 
   const logoEl = document.getElementById('topbar-biz-logo');
   if (logoEl) {
-    if (b.logo) { logoEl.src = b.logo; logoEl.style.display = ''; }
-    else        { logoEl.removeAttribute('src'); logoEl.style.display = 'none'; }
+    if (b.logo) {
+      const src = _blobUrlFor('logo|' + b.name, b.logo);
+      if (logoEl.getAttribute('src') !== src) {
+        // Fade in once decoded (stats.css .topbar-logo / .is-loaded) instead
+        // of popping in half-drawn.
+        logoEl.classList.remove('is-loaded');
+        logoEl.onload = () => logoEl.classList.add('is-loaded');
+        logoEl.src = src;
+        if (logoEl.complete) logoEl.classList.add('is-loaded');
+      }
+      logoEl.style.display = '';
+    } else {
+      logoEl.removeAttribute('src');
+      logoEl.style.display = 'none';
+    }
   }
 
   _applyStatsThemeVars(b.theme);
 }
 
-async function loadStatsBranding() {
-  if (!getApiBase()) { applyStatsBranding(_STATS_DEFAULT_BRANDING); return; }
-  // Snapshot which POS connection this call belongs to (state.js:_locationEpoch,
-  // bumped on every restaurant switch by location-picker.js). data-loader.js
-  // fires this off unawaited on every loadData() call — including the 60s
-  // auto-refresh — so without this guard a slow /api/branding response from
-  // the restaurant just switched AWAY from can land after the new one's own
-  // (faster) branding response already applied, silently reverting the
-  // topbar title/logo/theme back to the wrong restaurant's identity.
-  const myEpoch = _locationEpoch;
+// Per-POS branding cache (base URL → { data, at }). /api/branding carries the
+// logo as a data URI (~90 KB on a real shop), and loadData() runs every 60 s —
+// re-downloading an identity that almost never changes was pure waste on a
+// phone's data plan. Also lets a restaurant switch re-theme the topbar
+// instantly from a prefetched copy (store-cache.js) instead of after a fetch.
+const _BRANDING_TTL_MS = 10 * 60 * 1000;
+const _brandingInFlight = new Map(); // base URL → Promise — concurrent callers share one request
+
+// Persisted to localStorage (not IndexedDB like the data snapshots) on
+// purpose: it's small (one logo per restaurant) and must be readable
+// SYNCHRONOUSLY at boot, so the topbar is painted in the restaurant's own
+// name/logo/colors on the very first frame instead of flashing the neutral
+// ERPGEN default for the length of a network round trip.
+const _BRANDING_STORE_KEY = 'cp_branding_cache';
+const _brandingCache = (() => {
   try {
-    const data = await apiGet('/api/branding');
+    const raw = JSON.parse(localStorage.getItem(_BRANDING_STORE_KEY) || '{}');
+    return new Map(Object.entries(raw));
+  } catch {
+    return new Map();
+  }
+})();
+function _persistBrandingCache() {
+  try {
+    const saved = new Set(JSON.parse(localStorage.getItem('cp_locations') || '[]').map(l => l.url));
+    const obj = {};
+    _brandingCache.forEach((v, k) => { if (saved.has(k)) obj[k] = v; });
+    localStorage.setItem(_BRANDING_STORE_KEY, JSON.stringify(obj));
+  } catch { /* quota / private mode — cache stays in memory only */ }
+}
+
+function getCachedBranding(base) {
+  const hit = _brandingCache.get(base);
+  return hit ? hit.data : null;
+}
+
+// Fetches (or reuses, while fresh) one POS's branding. Never touches the UI —
+// callers decide whether the result belongs to the active restaurant.
+async function fetchBrandingFor(base, { force = false } = {}) {
+  const hit = _brandingCache.get(base);
+  if (hit && !force && Date.now() - hit.at < _BRANDING_TTL_MS) return hit.data;
+  if (_brandingInFlight.has(base)) return _brandingInFlight.get(base);
+  const p = apiGetFrom(base, '/api/branding')
+    .then(data => {
+      _brandingCache.set(base, { data, at: Date.now() });
+      _persistBrandingCache();
+      if (typeof _autoNameLocation === 'function') _autoNameLocation(base, data && data.name);
+      return data;
+    })
+    .finally(() => _brandingInFlight.delete(base));
+  _brandingInFlight.set(base, p);
+  return p;
+}
+
+// Paint the active restaurant's saved identity the moment this script runs —
+// earlier than app-init.js (which waits for every page script to download),
+// so on a slow connection the topbar is branded while the rest still loads.
+(function paintCachedBrandingEarly() {
+  try {
+    const base = getApiBase();
+    const cached = base && getCachedBranding(base);
+    if (cached) applyStatsBranding(cached);
+  } catch { /* topbar keeps the neutral default until loadStatsBranding() */ }
+})();
+
+// Awaited by data-loader.js:loadData() before it renders, because
+// helpers.js:getDayKey() depends on the POS's day-cycle hour carried here —
+// rendering first and theming after (the old fire-and-forget call) could
+// bucket a just-after-midnight order into the wrong business day.
+async function loadStatsBranding() {
+  const base = getApiBase();
+  if (!base) { applyStatsBranding(_STATS_DEFAULT_BRANDING); return; }
+  // Snapshot which POS connection this call belongs to (state.js:_locationEpoch,
+  // bumped on every restaurant switch by location-picker.js) — a slow response
+  // from the restaurant just switched AWAY from must not revert the topbar
+  // title/logo/theme back to the wrong restaurant's identity.
+  const myEpoch = _locationEpoch;
+  // Paint the last known identity right away (synchronously — this runs
+  // before first paint at boot); the fetch below only updates it if stale.
+  const cached = getCachedBranding(base);
+  if (cached) applyStatsBranding(cached);
+  try {
+    const data = await fetchBrandingFor(base);
     if (myEpoch !== _locationEpoch) return; // stale — a different POS is now active
     applyStatsBranding(data);
   } catch {
     if (myEpoch !== _locationEpoch) return;
-    applyStatsBranding(_STATS_DEFAULT_BRANDING);
+    // Keep whatever this POS's last known identity was rather than flashing
+    // the neutral ERPGEN default on a transient failure.
+    applyStatsBranding(getCachedBranding(base) || _STATS_DEFAULT_BRANDING);
   }
 }

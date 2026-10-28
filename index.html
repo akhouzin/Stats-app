@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
@@ -7,10 +7,17 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="CP Stats">
 <link rel="apple-touch-icon" href="logo.png">
-<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400;1,600&family=Cinzel:wght@400;600;700&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
 <title>ERPGEN — Stats</title>
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+<!-- Nothing third-party blocks the first paint: fonts load async (text shows
+     in the fallback face for a moment — display=swap), chart.js is deferred
+     (only the Revenus tab draws charts — page-revenue.js waits for it), and
+     html2canvas is fetched on the first Share tap (receipt-export.js). -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400;1,600&family=Cinzel:wght@400;600;700&family=Lato:wght@300;400;700&display=swap" onload="this.onload=null;this.rel='stylesheet'">
+<noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400;1,600&family=Cinzel:wght@400;600;700&family=Lato:wght@300;400;700&display=swap"></noscript>
+<script id="chartjs-lib" defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <link rel="stylesheet" href="./styles/stats.css">
 </head>
 <body>
@@ -55,7 +62,8 @@
 
 <!-- TODAY PAGE -->
 <div class="page" id="page-today">
-  <div id="today-loading" class="loading"><div class="spinner"></div><span class="loading-text">Chargement…</span></div>
+  <!-- Skeleton (stats.css .skel-*) — same shape as the page it stands in for, so data lands without a layout jump. -->
+  <div id="today-loading" class="skel-page" aria-label="Chargement…"><div class="skel skel-bar"></div><div class="skel-kpis"><div class="skel skel-kpi"></div><div class="skel skel-kpi"></div><div class="skel skel-kpi"></div><div class="skel skel-kpi"></div></div><div class="skel skel-card"><div class="skel skel-line"></div><div class="skel skel-line skel-short"></div><div class="skel skel-line"></div><div class="skel skel-line skel-short"></div></div></div>
   <div id="today-content" style="display:none;">
     <div class="day-nav" style="margin-bottom:12px;">
       <button class="day-nav-btn" id="t-day-prev" onclick="changeTodayDay(-1)">‹</button>
@@ -102,7 +110,7 @@
 
 <!-- RAPPORT DU MOIS PAGE -->
 <div class="page" id="page-rapport">
-  <div id="rapport-loading" class="loading"><div class="spinner"></div><span class="loading-text">Chargement…</span></div>
+  <div id="rapport-loading" class="skel-page" aria-label="Chargement…"><div class="skel skel-bar"></div><div class="skel-kpis"><div class="skel skel-kpi"></div><div class="skel skel-kpi"></div><div class="skel skel-kpi"></div><div class="skel skel-kpi"></div></div><div class="skel skel-card skel-tall"></div></div>
   <div id="rapport-content" style="display:none;">
     <div class="day-label" id="r-month-label" style="text-align:center;margin:12px 0 4px;">—</div>
     <div class="inv-period-bar" style="margin-bottom:12px;">
@@ -321,7 +329,7 @@
 
 <!-- REVENUE PAGE -->
 <div class="page" id="page-revenue">
-  <div id="revenue-loading" class="loading"><div class="spinner"></div><span class="loading-text">Chargement…</span></div>
+  <div id="revenue-loading" class="skel-page" aria-label="Chargement…"><div class="skel skel-card skel-tall"></div><div class="skel skel-card"></div></div>
   <div id="revenue-content" style="display:none;">
     <div class="card">
       <div class="card-title">Analyse des performances</div>
@@ -401,6 +409,10 @@
 <script src="./app/helpers.js"></script>
 <script src="./app/receipt-export.js"></script>
 <script src="./app/data-loader.js"></script>
+<script src="./app/store-db.js"></script>
+<script src="./app/store-cache.js"></script>
+<script src="./app/store-switcher.js"></script>
+<script src="./app/live-refresh.js"></script>
 <script src="./app/page-nav.js"></script>
 <script src="./app/page-today.js"></script>
 <script src="./app/page-barista.js"></script>
@@ -411,6 +423,8 @@
 <script src="./app/page-marc-stock.js"></script>
 <script src="./app/page-salary.js"></script>
 <script src="./app/page-recette.js"></script>
+<script src="./app/kpi-details.js"></script>
+<script src="./app/kpi-details-defs.js"></script>
 <script src="./app/app-init.js"></script>
 </body>
 </html>

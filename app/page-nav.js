@@ -65,10 +65,18 @@ function showPage(idx) {
 
   function baseOffset() { return -currentPage * window.innerWidth; }
 
-  // Returns true if el (or any ancestor up to wrap) can scroll horizontally
+  // Returns true if el (or any ancestor up to the slider) can scroll
+  // horizontally. Must stop at the slider and only count real horizontal
+  // scrollers (overflow-x auto/scroll): the slider itself is 5 pages wide
+  // (scrollWidth ≫ clientWidth since the pages became position:absolute), so
+  // the old "scrollWidth > clientWidth anywhere up to wrap" test matched it
+  // for every touch and silently disabled swiping between tabs.
   function insideHScrollable(el) {
-    while (el && el !== wrap) {
-      if (el.scrollWidth > el.clientWidth + 2) return true;
+    while (el && el !== wrap && el !== slider) {
+      if (el.scrollWidth > el.clientWidth + 2) {
+        const ox = getComputedStyle(el).overflowX;
+        if (ox === 'auto' || ox === 'scroll') return true;
+      }
       el = el.parentElement;
     }
     return false;

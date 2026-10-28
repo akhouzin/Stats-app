@@ -194,7 +194,7 @@ function _pmcRenderKpis(total, lineCount, articleCount, topCatName, topCatCost) 
 // ═══════════════════════════════════════
 // MONTH SCOPE — mirrors page-daily.js's Rapport: a month-nav plus several
 // specialized KPI-tab views (Résumé/Catégories/Tendances), each reading the
-// same already-loaded _marcAchats (fetchMarcAchats() has no date filter —
+// same already-loaded _marcAchats (/api/marc/achats has no date filter —
 // the whole purchase history is in memory, so month aggregation needs no
 // extra fetch, unlike allOrders which is lazy-loaded per month).
 // ═══════════════════════════════════════

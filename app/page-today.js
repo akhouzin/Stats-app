@@ -91,7 +91,14 @@ function renderToday() {
 
   // Recent orders (last 20)
   const recent = orders;
-  document.getElementById('t-recent').innerHTML = recent.length
+  const base = getApiBase();
+  // Skip the rebuild when nothing in it changed (most 60 s refreshes) — a
+  // rebuild re-creates every photo <img>, which blinks the whole list.
+  const recentEl = document.getElementById('t-recent');
+  const recentSig = `${base}|${dayKey}|${recent.length}|${total}|${recent[0] ? recent[0].num : ''}|${_menuSignature(menuItems)}`;
+  if (recentEl.dataset.sig === recentSig) return;
+  recentEl.dataset.sig = recentSig;
+  recentEl.innerHTML = recent.length
     ? recent.map(o => `
         <div class="live-order">
           <div class="live-order-top">
@@ -100,11 +107,15 @@ function renderToday() {
           </div>
           ${o.server !== '—' ? `<div class="live-order-server">${o.server}</div>` : ''}
           <div class="live-order-items">${o.items.map(i => {
-              const img = _menuByName().get(i.name)?.image;
+              // blob: URL (branding.js:_blobUrlFor) instead of the raw base64
+              // data URI — the same photo repeated on every order line used
+              // to make this innerHTML several MB long.
+              const m = _menuByName().get(i.name);
+              const img = m && m.image ? _blobUrlFor(`menu|${base}|${m.name}`, m.image) : '';
               return `
               <div class="live-order-item-row">
                 <span class="live-order-qtybadge">${i.qty}</span>
-                ${img ? `<span class="live-order-item-thumb"><img src="${img}" alt=""></span>` : ''}
+                ${img ? `<span class="live-order-item-thumb"><img src="${img}" alt="" loading="lazy" decoding="async"></span>` : ''}
                 <span>${i.name}</span>
               </div>`;
             }).join('')}</div>

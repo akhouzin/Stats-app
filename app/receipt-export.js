@@ -249,6 +249,11 @@ function _recBuildDoc(sectionTitle, periodLabel, rows, totalLabel, totalValue, b
 // later layout change instead of guessing at timing.
 function _recFillIframe(iframe, htmlDoc) {
   if (!iframe) return;
+  // Pages re-render on every 60 s refresh / store switch; reassigning an
+  // identical srcdoc re-navigates the iframe (re-parsing its embedded fonts
+  // and logo) and visibly blinks the receipt. Same document → keep it.
+  if (iframe._recLastDoc === htmlDoc) return;
+  iframe._recLastDoc = htmlDoc;
   // _recLoadPromise resolves once THIS srcdoc has actually finished loading
   // (a real navigation — its <link rel=stylesheet> included, per the load
   // event's own spec) — printReceiptIframe()/shareReceiptIframe() await it
@@ -384,9 +389,27 @@ async function printReceiptIframe(iframeId) {
   iframe.contentWindow.print();
 }
 
+// html2canvas (~200 KB) is only needed for Share, so it's fetched on the
+// first tap instead of render-blocking every app open from index.html's <head>.
+let _html2canvasPromise = null;
+function _ensureHtml2canvas() {
+  if (typeof html2canvas !== 'undefined') return Promise.resolve();
+  if (!_html2canvasPromise) {
+    _html2canvasPromise = new Promise((resolve, reject) => {
+      const s = document.createElement('script');
+      s.src = 'https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js';
+      s.onload = resolve;
+      s.onerror = () => { _html2canvasPromise = null; reject(new Error('html2canvas load failed')); };
+      document.head.appendChild(s);
+    });
+  }
+  return _html2canvasPromise;
+}
+
 async function shareReceiptIframe(iframeId, fileName) {
   const iframe = document.getElementById(iframeId);
-  if (!iframe || !iframe.contentDocument || typeof html2canvas === 'undefined') return;
+  if (!iframe || !iframe.contentDocument) return;
+  try { await _ensureHtml2canvas(); } catch (e) { console.error(e); return; }
   await _recAwaitFonts(iframe);
   // Capture <body>, not .receipt-page — the side/top margin around the
   // ticket is body's own padding; .receipt-page has none of its own, so

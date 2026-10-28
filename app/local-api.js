@@ -52,7 +52,14 @@ function _fetchWithTimeout(url, options) {
 }
 
 async function apiGet(path) {
-  const r = await _fetchWithTimeout(getApiBase() + path);
+  return apiGetFrom(getApiBase(), path);
+}
+
+// Same as apiGet() but against an explicit POS base URL instead of the active
+// one — store-cache.js uses it to prefetch the OTHER saved restaurants in the
+// background without touching cp_api_url.
+async function apiGetFrom(base, path) {
+  const r = await _fetchWithTimeout(base + path);
   if (!r.ok) throw new Error(`API ${r.status}: GET ${path}`);
   return r.json();
 }
@@ -89,22 +96,7 @@ async function apiDelete(path) {
 // load independent of compression. data-loader.js decides the actual window
 // (the current calendar month by default, extended backward on demand when
 // Recette/Rapport/Revenue need older history) — see its _historyWindowStart().
-async function fetchOrdersRange(fromDate, toDate) {
-  return apiGet(`/api/orders?from=${encodeURIComponent(fromDate.toISOString())}&to=${encodeURIComponent(toDate.toISOString())}`);
-}
-
-async function fetchMarcCategories() {
-  return apiGet('/api/marc/categories');
-}
-
-async function fetchMarcArticles() {
-  return apiGet('/api/marc/articles');
-}
-
-async function fetchMarcAchats() {
-  return apiGet('/api/marc/achats');
-}
-
-async function fetchMarcLinks() {
-  return apiGet('/api/marc/links');
+// `base` defaults to the active POS (getApiBase()).
+async function fetchOrdersRange(fromDate, toDate, base = getApiBase()) {
+  return apiGetFrom(base, `/api/orders?from=${encodeURIComponent(fromDate.toISOString())}&to=${encodeURIComponent(toDate.toISOString())}`);
 }
