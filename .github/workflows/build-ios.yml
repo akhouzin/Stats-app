@@ -1,0 +1,96 @@
+name: Build iOS (unsigned IPA)
+
+# Builds an UNSIGNED .ipa of the Capacitor app on a macOS runner — no Apple
+# Developer account needed. An iPhone won't run it as-is: it gets signed at
+# install time with a free Apple ID by Sideloadly or AltStore on a Windows PC
+# (the app then has to be refreshed every 7 days — AltStore does that
+# automatically over Wi-Fi). See the step summary of each run.
+#
+# The ios/ Xcode project isn't committed: it's generated fresh here by
+# `cap add ios` from the same www/ the Android build uses.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-14
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install Capacitor
+        run: npm install
+
+      - name: Sync web assets into www/
+        run: node sync-www.js
+
+      - name: Generate the iOS project
+        run: npx cap add ios
+
+      - name: App settings (camera permission for the QR scanner)
+        run: |
+          PLIST=ios/App/App/Info.plist
+          # The location picker scans the POS's QR code with the camera —
+          # iOS terminates an app that opens the camera without this text.
+          /usr/libexec/PlistBuddy -c "Add :NSCameraUsageDescription string 'Scanner le QR code du POS pour ajouter un restaurant.'" "$PLIST" \
+            || /usr/libexec/PlistBuddy -c "Set :NSCameraUsageDescription 'Scanner le QR code du POS pour ajouter un restaurant.'" "$PLIST"
+          /usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName 'ERPGEN Stats'" "$PLIST" \
+            || /usr/libexec/PlistBuddy -c "Add :CFBundleDisplayName string 'ERPGEN Stats'" "$PLIST"
+
+      - name: App icon
+        run: |
+          python3 -m pip install --quiet pillow
+          python3 gen-ios-icon.py "$RUNNER_TEMP/AppIcon-1024.png"
+          # Overwrite every icon slot in the template at its own pixel size.
+          for f in ios/App/App/Assets.xcassets/AppIcon.appiconset/*.png; do
+            s=$(sips -g pixelWidth "$f" | awk '/pixelWidth/ {print $2}')
+            sips -z "$s" "$s" "$RUNNER_TEMP/AppIcon-1024.png" --out "$f" >/dev/null
+          done
+
+      - name: Build (unsigned)
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          xcodebuild \
+            -workspace ios/App/App.xcworkspace \
+            -scheme App \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath "$RUNNER_TEMP/build" \
+            MARKETING_VERSION="$VERSION" \
+            CURRENT_PROJECT_VERSION="${{ github.run_number }}" \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            build | tail -n 25
+
+      - name: Package .ipa
+        run: |
+          APP="$RUNNER_TEMP/build/Build/Products/Release-iphoneos/App.app"
+          test -d "$APP"
+          mkdir -p "$RUNNER_TEMP/ipa/Payload"
+          cp -R "$APP" "$RUNNER_TEMP/ipa/Payload/"
+          (cd "$RUNNER_TEMP/ipa" && zip -qry "$GITHUB_WORKSPACE/ERPGEN-Stats-unsigned.ipa" Payload)
+          ls -lh ERPGEN-Stats-unsigned.ipa
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: erpgen-stats-ios-unsigned-ipa
+          path: ERPGEN-Stats-unsigned.ipa
+
+      - name: How to install
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" <<'EOF'
+          ### Install on an iPhone (free Apple ID)
+          1. Download the **erpgen-stats-ios-unsigned-ipa** artifact below and unzip it → `ERPGEN-Stats-unsigned.ipa`.
+          2. On a Windows PC, install **Sideloadly** (or **AltServer + AltStore**) and the non-Store versions of iTunes/iCloud.
+          3. Plug the iPhone in by USB, drop the `.ipa` in, sign in with any Apple ID, install.
+          4. On the iPhone: Settings → General → VPN & Device Management → trust the Apple ID. iOS 16+: also enable Settings → Privacy & Security → Developer Mode.
+          5. A free Apple ID signature lasts **7 days** — reinstall/refresh weekly (AltStore refreshes on its own when the PC runs AltServer on the same Wi-Fi). Max 3 such apps per iPhone.
+          EOF
