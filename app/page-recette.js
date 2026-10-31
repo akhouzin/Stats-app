@@ -382,8 +382,8 @@ function _recBuildExportHtml() {
   const margin = totalRec > 0 ? Math.round(net / totalRec * 100) : null;
   const dayBen = totalRec - totalSal - totalMarc;
   const green = '#2e6b45', red = '#b3261e', dim = '#9a978c', ink = '#1f4a30';
-  const th = `padding:5px 8px;text-align:right;font-size:10px;letter-spacing:0.5px;text-transform:uppercase;color:${ink};border-bottom:2px solid ${ink};white-space:nowrap;background:#f4f2ea;`;
-  const td = 'padding:2px 8px;line-height:1.2;text-align:right;border-bottom:1px solid #ebe8de;white-space:nowrap;';
+  const th = `padding:3px 8px;text-align:right;font-size:9.5px;letter-spacing:0.5px;text-transform:uppercase;color:${ink};border-bottom:2px solid ${ink};white-space:nowrap;background:#f4f2ea;`;
+  const td = 'padding:0 8px;line-height:15px;height:15px;text-align:right;border-bottom:1px solid #ebe8de;white-space:nowrap;';
   const num = v => v > 0 ? _recFmt(v) : `<span style="color:${dim}">—</span>`;
   const signed = v => (v < 0 ? '−' : '') + _recFmt(Math.abs(v));
 
@@ -404,7 +404,7 @@ function _recBuildExportHtml() {
     </tr>`;
   }).join('');
 
-  const ft = `padding:5px 8px;text-align:right;font-weight:700;border-top:2px solid ${ink};background:#f4f2ea;white-space:nowrap;`;
+  const ft = `padding:3px 8px;text-align:right;font-weight:700;border-top:2px solid ${ink};background:#f4f2ea;white-space:nowrap;`;
   const foot = `<tr>
     <td style="${ft}text-align:left;text-transform:uppercase;">Total</td>
     <td style="${ft}color:${green};">${_recFmt(totalRec)}</td>
@@ -414,7 +414,7 @@ function _recBuildExportHtml() {
   </tr>`;
 
   const panelTitle = `font-size:10px;letter-spacing:1px;text-transform:uppercase;color:${ink};font-weight:700;border-bottom:2px solid ${ink};padding:0 0 4px;margin-bottom:4px;`;
-  const line = (name, val, extra = '') => `<div style="display:flex;justify-content:space-between;gap:14px;padding:3px 0;border-bottom:1px solid #ebe8de;white-space:nowrap;${extra}">
+  const line = (name, val, extra = '') => `<div style="display:flex;justify-content:space-between;gap:14px;padding:1px 0;line-height:16px;border-bottom:1px solid #ebe8de;white-space:nowrap;${extra}">
       <span>${name}</span><span style="font-weight:700;">${val}</span></div>`;
   const pct = v => totalRec > 0 ? ` <small style="color:${dim};font-weight:400;">${Math.round(v / totalRec * 100)}%</small>` : '';
 
@@ -433,7 +433,7 @@ function _recBuildExportHtml() {
       </div>
     </div>
     <div style="display:flex;align-items:flex-start;gap:18px;">
-      <table style="border-collapse:collapse;font-size:12px;">
+      <table style="border-collapse:collapse;font-size:11.5px;">
         <thead><tr>${head}</tr></thead>
         <tbody>${body}</tbody>
         <tfoot>${foot}</tfoot>
