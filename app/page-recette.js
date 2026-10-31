@@ -388,7 +388,7 @@ function _recBuildExportHtml() {
   const signed = v => (v < 0 ? '−' : '') + _recFmt(Math.abs(v));
 
   const head = `<th style="${th}text-align:left;">Jour</th><th style="${th}color:${green};">Recette</th>`
-    + `<th style="${th}">Salaires</th><th style="${th}">March.</th><th style="${th}">Bénéfice</th>`;
+    + `<th style="${th}">Salaires</th><th style="${th}">March.</th><th style="${th}">Brut</th>`;
 
   const body = rows.map((r, i) => {
     const bg = r.isToday ? 'background:#fffbe8;' : (i % 2 ? 'background:#f7f6f1;' : '');
@@ -444,9 +444,10 @@ function _recBuildExportHtml() {
         ${line('Recette', `<span style="color:${green};">+ ${_recFmt(totalRec)}</span>`)}
         ${line('Salaires', `− ${_recFmt(totalSal)}${pct(totalSal)}`)}
         ${line('Marchandise', `− ${_recFmt(totalMarc)}${pct(totalMarc)}`)}
+        ${line('Bénéfice brut <small style="color:' + dim + ';font-weight:400;">(Total Brut)</small>', `<span style="color:${dayBen >= 0 ? green : red};">= ${signed(dayBen)}</span>`, `font-weight:700;border-top:1px solid ${ink};`)}
         ${line('Autres charges', `− ${_recFmt(totalOther)}${pct(totalOther)}`)}
         <div style="display:flex;justify-content:space-between;align-items:baseline;gap:14px;margin-top:8px;padding:8px 10px;border-radius:8px;color:#fff;background:${net >= 0 ? ink : '#8e2a20'};white-space:nowrap;">
-          <span style="font-size:11px;letter-spacing:1px;text-transform:uppercase;">Bénéfice</span>
+          <span style="font-size:11px;letter-spacing:1px;text-transform:uppercase;">Bénéfice net</span>
           <span style="font-size:17px;font-weight:700;">= ${signed(net)} Dhs</span>
         </div>
         ${margin !== null ? `<div style="font-size:11px;color:${dim};text-align:right;margin-top:3px;">marge ${margin}%</div>` : ''}
