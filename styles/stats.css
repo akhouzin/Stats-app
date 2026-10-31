@@ -493,6 +493,8 @@
   .rec-table .rec-charge-input { width:100%; min-width:60px; border:1px solid transparent; border-radius:6px; background:#faf9f5; font-size:13px; font-weight:600; color:var(--text); text-align:right; padding:5px 6px; font-variant-numeric:tabular-nums; }
   .rec-table .rec-charge-input:focus { border-color:var(--green-dark); background:#fff; }
   .rec-table .rec-charge-input::placeholder { color:#c9c6bb; }
+  .rec-tr-month td, .rec-tr-month .rec-td-day { background:#faf9f5; border-top:1px solid var(--border); font-weight:700; }
+  .rec-tr-month .rec-charge-input { background:#fff; border-color:var(--border); }
 
   /* MARCHANDISE → STOCK (page-marc-stock.js) */
   .mst-order-card { border-top:2px solid var(--red); }

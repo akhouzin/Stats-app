@@ -125,18 +125,36 @@ function restoreFixedCharge() {
   });
 }
 
-async function setChargeAmount(chargeId, dayKey, val) {
+// "Autres charges" are monthly, not per-day: one amount per charge per
+// month, stored on the month's LAST day key (the backend still keys by day).
+// Months entered back when charges were per-day can have amounts spread over
+// several days — the monthly row shows their sum, and the first edit folds
+// them into the single last-day entry.
+function _recMonthChargeTotal(chargeId, prefix) {
+  const days = _chargeDays[chargeId] || {};
+  return Object.keys(days).reduce((s, k) => k.startsWith(prefix) ? s + (days[k] || 0) : s, 0);
+}
+
+async function setMonthChargeAmount(chargeId, lastDayKey, val) {
+  const prefix = lastDayKey.slice(0, 8); // 'YYYY-MM-'
+  const days = _chargeDays[chargeId] || {};
+  for (const k of Object.keys(days)) {
+    if (k.startsWith(prefix) && k !== lastDayKey) {
+      await apiDelete(`/api/rec/charge-days?charge_id=${chargeId}&day_key=${k}`);
+      delete days[k];
+    }
+  }
   const amount = parseFloat(val);
   if (isNaN(amount) || val.trim() === '') {
-    await apiDelete(`/api/rec/charge-days?charge_id=${chargeId}&day_key=${dayKey}`);
-    if (_chargeDays[chargeId]) delete _chargeDays[chargeId][dayKey];
+    await apiDelete(`/api/rec/charge-days?charge_id=${chargeId}&day_key=${lastDayKey}`);
+    if (_chargeDays[chargeId]) delete _chargeDays[chargeId][lastDayKey];
   } else {
-    await apiPut('/api/rec/charge-days', { charge_id: chargeId, day_key: dayKey, amount });
+    await apiPut('/api/rec/charge-days', { charge_id: chargeId, day_key: lastDayKey, amount });
     if (!_chargeDays[chargeId]) _chargeDays[chargeId] = {};
-    _chargeDays[chargeId][dayKey] = amount;
+    _chargeDays[chargeId][lastDayKey] = amount;
   }
-  // Re-render so the day's Bénéfice and the month totals follow the edit,
-  // then give focus back to whichever charge cell the user tabbed into.
+  // Re-render so the month's Bénéfice and totals follow the edit, then give
+  // focus back to whichever charge cell the user tabbed into.
   const active = document.activeElement;
   const refocus = active && active.classList && active.classList.contains('rec-charge-input')
     ? { c: active.dataset.c, d: active.dataset.d } : null;
@@ -193,6 +211,10 @@ let _recSummaryState = { totalRec: 0, totalSal: 0, totalMarc: 0, totalOther: 0, 
 
 function _recFmt(n) {
   return Math.round(n).toLocaleString('fr-FR');
+}
+
+function _recSigned(n, sign) {
+  return (n ? sign + ' ' : '') + _recFmt(n);
 }
 
 function _recEsc(s) {
@@ -261,9 +283,12 @@ function renderRecette() {
   html += '<th class="rec-th rec-th-ben">Bénéfice</th>';
   html += '</tr></thead><tbody>';
 
-  let totalRec = 0, totalSal = 0, totalMarc = 0, totalOther = 0, totalBen = 0, activeDays = 0;
+  let totalRec = 0, totalSal = 0, totalMarc = 0, totalBen = 0, activeDays = 0;
   const exportRows = [];
-  const byCharge = _charges.map(c => ({ id: c.id, name: c.name, total: 0 }));
+  const monthPrefix = `${my}-${String(mm+1).padStart(2,'0')}-`;
+  const lastDayKey = getSalDayKeyRec(my, mm, daysInMonth);
+  const byCharge = _charges.map(c => ({ id: c.id, name: c.name, total: _recMonthChargeTotal(c.id, monthPrefix) }));
+  const totalOther = byCharge.reduce((s, c) => s + c.total, 0);
   const dash = '<span class="rec-zero">—</span>';
   const cell = (v, cls = '') => `<td class="rec-td${cls}">${v > 0 ? _recFmt(v) : dash}</td>`;
 
@@ -282,48 +307,50 @@ function renderRecette() {
     const rec  = isFuture ? 0 : getDayRevenue(my, mm, d);
     const sal  = isFuture ? 0 : getDaySalaire(my, mm, d);
     const marc = marcByDay[dayKey] || 0;
-    let other = 0;
-    _charges.forEach((c, ci) => {
-      const amt = (_chargeDays[c.id] || {})[dayKey] || 0;
-      other += amt;
-      byCharge[ci].total += amt;
-    });
-    const ben = rec - sal - marc - other;
-    const hasAny = rec || sal || marc || other;
-    totalRec += rec; totalSal += sal; totalMarc += marc; totalOther += other;
+    const ben = rec - sal - marc;
+    const hasAny = rec || sal || marc;
+    totalRec += rec; totalSal += sal; totalMarc += marc;
     totalBen += ben;
     if (rec > 0) activeDays++;
-    exportRows.push({
-      dayLabel, isToday, isWeekend, hasAny, rec, sal, marc, ben,
-      charges: _charges.map(c => (_chargeDays[c.id] || {})[dayKey] || 0),
-    });
+    exportRows.push({ dayLabel, isToday, isWeekend, hasAny, rec, sal, marc, ben });
 
     html += `<tr class="${trCls}">`;
     html += `<td class="rec-td-day">${dayLabel}</td>`;
     html += isFuture ? `<td class="rec-td rec-td-rec">${dash}</td>` : cell(rec, ' rec-td-rec');
     html += cell(sal);
     html += cell(marc);
-    _charges.forEach(c => {
-      const amt = (_chargeDays[c.id] || {})[dayKey];
-      html += `<td class="rec-td rec-charge-cell"><input class="rec-charge-input" type="number" inputmode="decimal" min="0" step="1"
-          data-c="${c.id}" data-d="${dayKey}" value="${amt != null ? amt : ''}" placeholder="—"
-          onchange="setChargeAmount('${c.id}','${dayKey}',this.value)"></td>`;
-    });
+    html += _charges.map(() => '<td class="rec-td rec-td-chg-day"></td>').join('');
     html += !hasAny
       ? `<td class="rec-td rec-td-ben">${dash}</td>`
       : `<td class="rec-td rec-td-ben ${ben >= 0 ? 'is-pos' : 'is-neg'}">${_recFmt(ben)}</td>`;
     html += '</tr>';
   }
+
+  // Monthly "autres charges" row, right under the last day.
+  if (_charges.length) {
+    html += `<tr class="rec-tr rec-tr-month">
+      <td class="rec-td-day">Charges du mois</td>
+      <td class="rec-td"></td><td class="rec-td"></td><td class="rec-td"></td>`;
+    byCharge.forEach(c => {
+      html += `<td class="rec-td rec-charge-cell"><input class="rec-charge-input" type="number" inputmode="decimal" min="0" step="1"
+          data-c="${c.id}" data-d="${lastDayKey}" value="${c.total ? c.total : ''}" placeholder="—"
+          onchange="setMonthChargeAmount('${c.id}','${lastDayKey}',this.value)"></td>`;
+    });
+    html += `<td class="rec-td rec-td-ben ${totalOther ? 'is-neg' : ''}">${totalOther ? '−' + _recFmt(totalOther) : dash}</td></tr>`;
+  }
   html += '</tbody>';
 
-  // Month totals footer — same columns as the body.
+  totalBen -= totalOther;
+
+  // Month totals footer — signed, so the row reads as the calculation:
+  // + Recette − Salaires − Marchandise − each charge = Bénéfice.
   html += `<tfoot><tr>
     <td class="rec-td-day">Total</td>
-    <td class="rec-td rec-td-rec">${_recFmt(totalRec)}</td>
-    <td class="rec-td">${_recFmt(totalSal)}</td>
-    <td class="rec-td">${_recFmt(totalMarc)}</td>
-    ${byCharge.map(c => `<td class="rec-td">${_recFmt(c.total)}</td>`).join('')}
-    <td class="rec-td rec-td-ben ${totalBen >= 0 ? 'is-pos' : 'is-neg'}">${_recFmt(totalBen)}</td>
+    <td class="rec-td rec-td-rec">${_recSigned(totalRec, '+')}</td>
+    <td class="rec-td">${_recSigned(totalSal, '−')}</td>
+    <td class="rec-td">${_recSigned(totalMarc, '−')}</td>
+    ${byCharge.map(c => `<td class="rec-td">${_recSigned(c.total, '−')}</td>`).join('')}
+    <td class="rec-td rec-td-ben ${totalBen >= 0 ? 'is-pos' : 'is-neg'}">= ${totalBen < 0 ? '−' : ''}${_recFmt(Math.abs(totalBen))}</td>
   </tr></tfoot>`;
 
   document.getElementById('rec-sheet').innerHTML = html;
@@ -370,19 +397,24 @@ function _recBuildExportHtml() {
       <td style="${td}${bg}font-weight:700;color:${green};">${num(r.rec)}</td>
       <td style="${td}${bg}">${num(r.sal)}</td>
       <td style="${td}${bg}">${num(r.marc)}</td>
-      ${r.charges.map(a => `<td style="${td}${bg}">${num(a)}</td>`).join('')}
+      ${_charges.map(() => `<td style="${td}${bg}"></td>`).join('')}
       ${ben}
     </tr>`;
-  }).join('');
+  }).join('') + (byCharge.length ? `<tr>
+      <td style="${td}text-align:left;font-weight:700;background:#faf9f5;">Charges du mois</td>
+      <td style="${td}background:#faf9f5;"></td><td style="${td}background:#faf9f5;"></td><td style="${td}background:#faf9f5;"></td>
+      ${byCharge.map(c => `<td style="${td}font-weight:700;background:#faf9f5;">${num(c.total)}</td>`).join('')}
+      <td style="${td}font-weight:700;background:#faf9f5;color:${red};">${totalOther ? '−' + _recFmt(totalOther) : num(0)}</td>
+    </tr>` : '');
 
   const ft = 'padding:8px 9px;text-align:right;font-weight:700;border-top:2px solid #1f4a30;background:#f4f2ea;white-space:nowrap;';
   const foot = `<tr>
     <td style="${ft}text-align:left;text-transform:uppercase;">Total</td>
-    <td style="${ft}color:${green};">${_recFmt(totalRec)}</td>
-    <td style="${ft}">${_recFmt(totalSal)}</td>
-    <td style="${ft}">${_recFmt(totalMarc)}</td>
-    ${byCharge.map(c => `<td style="${ft}">${_recFmt(c.total)}</td>`).join('')}
-    <td style="${ft}color:${totalBen >= 0 ? green : red};">${_recFmt(totalBen)}</td>
+    <td style="${ft}color:${green};">${_recSigned(totalRec, '+')}</td>
+    <td style="${ft}">${_recSigned(totalSal, '−')}</td>
+    <td style="${ft}">${_recSigned(totalMarc, '−')}</td>
+    ${byCharge.map(c => `<td style="${ft}">${_recSigned(c.total, '−')}</td>`).join('')}
+    <td style="${ft}color:${totalBen >= 0 ? green : red};">= ${totalBen < 0 ? '−' : ''}${_recFmt(Math.abs(totalBen))}</td>
   </tr>`;
 
   const tile = (t, v, sub) => `<div style="flex:1;min-width:120px;border:1px solid #e3e0d5;border-radius:8px;padding:8px 10px;">
