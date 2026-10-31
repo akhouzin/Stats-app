@@ -370,86 +370,90 @@ function renderRecette() {
 // html2canvas can silently drop them (see receipt-export.js).
 let _recExportState = null;
 
+// Layout: a compact day table (Jour | Recette | Salaires | Marchandise |
+// Bénéfice) on the left; on the right the month's "autres charges" and the
+// signed calculation down to the Bénéfice — a panel of their own instead of
+// charge columns that would sit empty on every day row.
 function _recBuildExportHtml() {
-  const { label, rows, totalBen } = _recExportState;
+  const { label, rows } = _recExportState;
   const { totalRec, totalSal, totalMarc, totalOther, byCharge, activeDays } = _recSummaryState;
   const { bizName, logoSrc } = _recBizIdentity();
-  const totalChg = totalSal + totalMarc + totalOther;
-  const net = totalRec - totalChg;
+  const net = totalRec - totalSal - totalMarc - totalOther;
   const margin = totalRec > 0 ? Math.round(net / totalRec * 100) : null;
-  const green = '#2e6b45', red = '#b3261e', dim = '#9a978c';
-  const th = 'padding:7px 9px;text-align:right;font-size:11px;letter-spacing:0.5px;text-transform:uppercase;color:#1f4a30;border-bottom:2px solid #1f4a30;white-space:nowrap;background:#f4f2ea;';
-  // Tight rows (a 31-day month must stay compact) + zebra striping below so
-  // the eye can follow a row across the wide table.
-  const td = 'padding:2px 9px;line-height:1.25;text-align:right;border-bottom:1px solid #ebe8de;white-space:nowrap;';
+  const dayBen = totalRec - totalSal - totalMarc;
+  const green = '#2e6b45', red = '#b3261e', dim = '#9a978c', ink = '#1f4a30';
+  const th = `padding:5px 8px;text-align:right;font-size:10px;letter-spacing:0.5px;text-transform:uppercase;color:${ink};border-bottom:2px solid ${ink};white-space:nowrap;background:#f4f2ea;`;
+  const td = 'padding:2px 8px;line-height:1.2;text-align:right;border-bottom:1px solid #ebe8de;white-space:nowrap;';
   const num = v => v > 0 ? _recFmt(v) : `<span style="color:${dim}">—</span>`;
+  const signed = v => (v < 0 ? '−' : '') + _recFmt(Math.abs(v));
 
-  let head = `<th style="${th}text-align:left;">Jour</th><th style="${th}color:${green};">Recette</th>`
-    + `<th style="${th}">Salaires</th><th style="${th}">Marchandise</th>`
-    + _charges.map(c => `<th style="${th}">${_recEsc(c.name)}</th>`).join('')
-    + `<th style="${th}">Bénéfice</th>`;
+  const head = `<th style="${th}text-align:left;">Jour</th><th style="${th}color:${green};">Recette</th>`
+    + `<th style="${th}">Salaires</th><th style="${th}">March.</th><th style="${th}">Bénéfice</th>`;
 
   const body = rows.map((r, i) => {
     const bg = r.isToday ? 'background:#fffbe8;' : (i % 2 ? 'background:#f7f6f1;' : '');
     const ben = r.hasAny
-      ? `<td style="${td}${bg}font-weight:700;color:${r.ben >= 0 ? green : red};">${_recFmt(r.ben)}</td>`
+      ? `<td style="${td}${bg}font-weight:700;color:${r.ben >= 0 ? green : red};">${signed(r.ben)}</td>`
       : `<td style="${td}${bg}">${num(0)}</td>`;
     return `<tr>
       <td style="${td}${bg}text-align:left;font-weight:600;text-transform:capitalize;${r.isWeekend ? `color:${red};` : ''}">${r.dayLabel}</td>
       <td style="${td}${bg}font-weight:700;color:${green};">${num(r.rec)}</td>
       <td style="${td}${bg}">${num(r.sal)}</td>
       <td style="${td}${bg}">${num(r.marc)}</td>
-      ${_charges.map(() => `<td style="${td}${bg}"></td>`).join('')}
       ${ben}
     </tr>`;
-  }).join('') + (byCharge.length ? `<tr>
-      <td style="${td}text-align:left;font-weight:700;background:#faf9f5;">Charges du mois</td>
-      <td style="${td}background:#faf9f5;"></td><td style="${td}background:#faf9f5;"></td><td style="${td}background:#faf9f5;"></td>
-      ${byCharge.map(c => `<td style="${td}font-weight:700;background:#faf9f5;">${num(c.total)}</td>`).join('')}
-      <td style="${td}font-weight:700;background:#faf9f5;color:${red};">${totalOther ? '−' + _recFmt(totalOther) : num(0)}</td>
-    </tr>` : '');
+  }).join('');
 
-  const ft = 'padding:8px 9px;text-align:right;font-weight:700;border-top:2px solid #1f4a30;background:#f4f2ea;white-space:nowrap;';
+  const ft = `padding:5px 8px;text-align:right;font-weight:700;border-top:2px solid ${ink};background:#f4f2ea;white-space:nowrap;`;
   const foot = `<tr>
     <td style="${ft}text-align:left;text-transform:uppercase;">Total</td>
-    <td style="${ft}color:${green};">${_recSigned(totalRec, '+')}</td>
-    <td style="${ft}">${_recSigned(totalSal, '−')}</td>
-    <td style="${ft}">${_recSigned(totalMarc, '−')}</td>
-    ${byCharge.map(c => `<td style="${ft}">${_recSigned(c.total, '−')}</td>`).join('')}
-    <td style="${ft}color:${totalBen >= 0 ? green : red};">= ${totalBen < 0 ? '−' : ''}${_recFmt(Math.abs(totalBen))}</td>
+    <td style="${ft}color:${green};">${_recFmt(totalRec)}</td>
+    <td style="${ft}">${_recFmt(totalSal)}</td>
+    <td style="${ft}">${_recFmt(totalMarc)}</td>
+    <td style="${ft}color:${dayBen >= 0 ? green : red};">${signed(dayBen)}</td>
   </tr>`;
 
-  const tile = (t, v, sub) => `<div style="flex:1;min-width:120px;border:1px solid #e3e0d5;border-radius:8px;padding:8px 10px;">
-      <div style="font-size:10px;letter-spacing:1px;text-transform:uppercase;color:${dim};">${t}</div>
-      <div style="font-size:18px;font-weight:700;margin-top:2px;">${_recFmt(v)} <small style="font-size:11px;font-weight:400;">Dhs</small></div>
-      ${sub ? `<div style="font-size:10px;color:${dim};margin-top:2px;">${sub}</div>` : ''}
-    </div>`;
-  const pct = v => totalRec > 0 ? `${Math.round(v / totalRec * 100)}% de la recette` : '';
+  const panelTitle = `font-size:10px;letter-spacing:1px;text-transform:uppercase;color:${ink};font-weight:700;border-bottom:2px solid ${ink};padding:0 0 4px;margin-bottom:4px;`;
+  const line = (name, val, extra = '') => `<div style="display:flex;justify-content:space-between;gap:14px;padding:3px 0;border-bottom:1px solid #ebe8de;white-space:nowrap;${extra}">
+      <span>${name}</span><span style="font-weight:700;">${val}</span></div>`;
+  const pct = v => totalRec > 0 ? ` <small style="color:${dim};font-weight:400;">${Math.round(v / totalRec * 100)}%</small>` : '';
+
+  const chargesPanel = byCharge.length ? `
+      <div style="${panelTitle}">Charges du mois</div>
+      ${byCharge.map(c => line(_recEsc(c.name), num(c.total))).join('')}
+      ${line('Total', _recFmt(totalOther), 'border-bottom:none;font-weight:700;')}
+      <div style="height:14px;"></div>` : '';
 
   return `
-    <div style="display:flex;align-items:center;gap:12px;margin-bottom:4px;">
-      ${logoSrc ? `<img src="${logoSrc}" style="max-height:42px;max-width:110px;object-fit:contain;">` : ''}
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+      ${logoSrc ? `<img src="${logoSrc}" style="max-height:36px;max-width:90px;object-fit:contain;">` : ''}
       <div>
-        <div style="font-size:18px;font-weight:800;letter-spacing:2px;">${_recEsc(bizName.toUpperCase())}</div>
-        <div style="font-size:13px;color:#555;">Recette & Charges — ${_recEsc(label)}</div>
+        <div style="font-size:16px;font-weight:800;letter-spacing:2px;">${_recEsc(bizName.toUpperCase())}</div>
+        <div style="font-size:12px;color:#555;">Recette & Charges — ${_recEsc(label)}</div>
       </div>
     </div>
-    <div style="display:flex;gap:8px;flex-wrap:wrap;margin:12px 0;">
-      ${tile('Recette', totalRec, activeDays ? `${activeDays} jours · moy. ${_recFmt(totalRec / activeDays)}/j` : '')}
-      ${tile('Salaires', totalSal, pct(totalSal))}
-      ${tile('Marchandise', totalMarc, pct(totalMarc))}
-      ${tile('Autres charges', totalOther, pct(totalOther))}
+    <div style="display:flex;align-items:flex-start;gap:18px;">
+      <table style="border-collapse:collapse;font-size:12px;">
+        <thead><tr>${head}</tr></thead>
+        <tbody>${body}</tbody>
+        <tfoot>${foot}</tfoot>
+      </table>
+      <div style="min-width:200px;font-size:12.5px;">
+        ${chargesPanel}
+        <div style="${panelTitle}">Calcul du mois</div>
+        ${line('Recette', `<span style="color:${green};">+ ${_recFmt(totalRec)}</span>`)}
+        ${line('Salaires', `− ${_recFmt(totalSal)}${pct(totalSal)}`)}
+        ${line('Marchandise', `− ${_recFmt(totalMarc)}${pct(totalMarc)}`)}
+        ${line('Autres charges', `− ${_recFmt(totalOther)}${pct(totalOther)}`)}
+        <div style="display:flex;justify-content:space-between;align-items:baseline;gap:14px;margin-top:8px;padding:8px 10px;border-radius:8px;color:#fff;background:${net >= 0 ? ink : '#8e2a20'};white-space:nowrap;">
+          <span style="font-size:11px;letter-spacing:1px;text-transform:uppercase;">Bénéfice</span>
+          <span style="font-size:17px;font-weight:700;">= ${signed(net)} Dhs</span>
+        </div>
+        ${margin !== null ? `<div style="font-size:11px;color:${dim};text-align:right;margin-top:3px;">marge ${margin}%</div>` : ''}
+        ${activeDays ? `<div style="font-size:11px;color:${dim};margin-top:12px;">${activeDays} jours de recette · moy. ${_recFmt(totalRec / activeDays)} Dhs/j</div>` : ''}
+      </div>
     </div>
-    <div style="display:flex;justify-content:space-between;align-items:baseline;padding:9px 12px;border-radius:8px;margin-bottom:14px;color:#fff;background:${net >= 0 ? '#1f4a30' : '#8e2a20'};">
-      <span style="font-size:12px;letter-spacing:1.5px;text-transform:uppercase;">Bénéfice</span>
-      <span style="font-size:20px;font-weight:700;">${_recFmt(net)} Dhs${margin !== null ? `<small style="font-size:11px;font-weight:400;"> · marge ${margin}%</small>` : ''}</span>
-    </div>
-    <table style="border-collapse:collapse;width:100%;font-size:12.5px;">
-      <thead><tr>${head}</tr></thead>
-      <tbody>${body}</tbody>
-      <tfoot>${foot}</tfoot>
-    </table>
-    <div style="font-size:10px;color:${dim};text-align:right;margin-top:10px;">Généré le ${_recPrintedAt()} — ERPGEN Stats</div>`;
+    <div style="font-size:10px;color:${dim};text-align:right;margin-top:8px;">Généré le ${_recPrintedAt()} — ERPGEN Stats</div>`;
 }
 
 let _recSharing = false;
@@ -459,7 +463,7 @@ async function shareRecetteImage() {
   const btn = document.getElementById('rec-share-btn');
   if (btn) btn.disabled = true;
   const node = document.createElement('div');
-  node.style.cssText = 'position:fixed;left:-10000px;top:0;width:max-content;min-width:560px;padding:20px;background:#fff;color:#222;font-family:Arial,Helvetica,sans-serif;font-variant-numeric:tabular-nums;';
+  node.style.cssText = 'position:fixed;left:-10000px;top:0;width:max-content;padding:14px 16px;background:#fff;color:#222;font-family:Arial,Helvetica,sans-serif;font-variant-numeric:tabular-nums;';
   try {
     await _ensureHtml2canvas();
     node.innerHTML = _recBuildExportHtml();
