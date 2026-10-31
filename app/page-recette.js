@@ -418,11 +418,8 @@ function _recBuildExportHtml() {
       <span>${name}</span><span style="font-weight:700;">${val}</span></div>`;
   const pct = v => totalRec > 0 ? ` <small style="color:${dim};font-weight:400;">${Math.round(v / totalRec * 100)}%</small>` : '';
 
-  const chargesPanel = byCharge.length ? `
-      <div style="${panelTitle}">Charges du mois</div>
-      ${byCharge.map(c => line(_recEsc(c.name), num(c.total))).join('')}
-      ${line('Total', _recFmt(totalOther), 'border-bottom:none;font-weight:700;')}
-      <div style="height:14px;"></div>` : '';
+  // Each monthly charge itemized right under the Bénéfice brut subtotal.
+  const chargeLines = byCharge.map(c => line(_recEsc(c.name), `− ${_recFmt(c.total)}${pct(c.total)}`)).join('');
 
   return `
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
@@ -439,13 +436,12 @@ function _recBuildExportHtml() {
         <tfoot>${foot}</tfoot>
       </table>
       <div style="min-width:200px;font-size:12.5px;">
-        ${chargesPanel}
         <div style="${panelTitle}">Calcul du mois</div>
         ${line('Recette', `<span style="color:${green};">+ ${_recFmt(totalRec)}</span>`)}
         ${line('Salaires', `− ${_recFmt(totalSal)}${pct(totalSal)}`)}
         ${line('Marchandise', `− ${_recFmt(totalMarc)}${pct(totalMarc)}`)}
         ${line('Bénéfice brut <small style="color:' + dim + ';font-weight:400;">(Total Brut)</small>', `<span style="color:${dayBen >= 0 ? green : red};">= ${signed(dayBen)}</span>`, `font-weight:700;border-top:1px solid ${ink};`)}
-        ${line('Autres charges', `− ${_recFmt(totalOther)}${pct(totalOther)}`)}
+        ${chargeLines}
         <div style="display:flex;justify-content:space-between;align-items:baseline;gap:14px;margin-top:8px;padding:8px 10px;border-radius:8px;color:#fff;background:${net >= 0 ? ink : '#8e2a20'};white-space:nowrap;">
           <span style="font-size:11px;letter-spacing:1px;text-transform:uppercase;">Bénéfice net</span>
           <span style="font-size:17px;font-weight:700;">= ${signed(net)} Dhs</span>
