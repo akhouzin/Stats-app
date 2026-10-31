@@ -379,7 +379,9 @@ function _recBuildExportHtml() {
   const margin = totalRec > 0 ? Math.round(net / totalRec * 100) : null;
   const green = '#2e6b45', red = '#b3261e', dim = '#9a978c';
   const th = 'padding:7px 9px;text-align:right;font-size:11px;letter-spacing:0.5px;text-transform:uppercase;color:#1f4a30;border-bottom:2px solid #1f4a30;white-space:nowrap;background:#f4f2ea;';
-  const td = 'padding:5px 9px;text-align:right;border-bottom:1px solid #ebe8de;white-space:nowrap;';
+  // Tight rows (a 31-day month must stay compact) + zebra striping below so
+  // the eye can follow a row across the wide table.
+  const td = 'padding:2px 9px;line-height:1.25;text-align:right;border-bottom:1px solid #ebe8de;white-space:nowrap;';
   const num = v => v > 0 ? _recFmt(v) : `<span style="color:${dim}">—</span>`;
 
   let head = `<th style="${th}text-align:left;">Jour</th><th style="${th}color:${green};">Recette</th>`
@@ -387,8 +389,8 @@ function _recBuildExportHtml() {
     + _charges.map(c => `<th style="${th}">${_recEsc(c.name)}</th>`).join('')
     + `<th style="${th}">Bénéfice</th>`;
 
-  const body = rows.map(r => {
-    const bg = r.isToday ? 'background:#fffbe8;' : '';
+  const body = rows.map((r, i) => {
+    const bg = r.isToday ? 'background:#fffbe8;' : (i % 2 ? 'background:#f7f6f1;' : '');
     const ben = r.hasAny
       ? `<td style="${td}${bg}font-weight:700;color:${r.ben >= 0 ? green : red};">${_recFmt(r.ben)}</td>`
       : `<td style="${td}${bg}">${num(0)}</td>`;
@@ -442,7 +444,7 @@ function _recBuildExportHtml() {
       <span style="font-size:12px;letter-spacing:1.5px;text-transform:uppercase;">Bénéfice</span>
       <span style="font-size:20px;font-weight:700;">${_recFmt(net)} Dhs${margin !== null ? `<small style="font-size:11px;font-weight:400;"> · marge ${margin}%</small>` : ''}</span>
     </div>
-    <table style="border-collapse:collapse;width:100%;font-size:13px;">
+    <table style="border-collapse:collapse;width:100%;font-size:12.5px;">
       <thead><tr>${head}</tr></thead>
       <tbody>${body}</tbody>
       <tfoot>${foot}</tfoot>
