@@ -13,7 +13,7 @@
 // Bump SHELL_CACHE to force every client to drop its cached shell.
 // ═══════════════════════════════════════
 
-const SHELL_CACHE = 'erpgen-stats-shell-v1';
+const SHELL_CACHE = 'erpgen-stats-shell-v2';
 const CDN_CACHE   = 'erpgen-stats-cdn-v1';
 const CDN_HOSTS   = ['cdn.jsdelivr.net', 'fonts.googleapis.com', 'fonts.gstatic.com'];
 
@@ -44,7 +44,9 @@ async function staleWhileRevalidate(event, req) {
   const cache = await caches.open(SHELL_CACHE);
   // A deep link (?add=…&url=…) is the same shell — don't cache it per query.
   const cached = await cache.match(req, { ignoreSearch: req.mode === 'navigate' });
-  const network = fetch(req)
+  // cache:'no-cache' — revalidate with the server (cheap 304 when unchanged)
+  // instead of GitHub Pages' 10-min HTTP cache, which delayed new versions.
+  const network = fetch(req, { cache: 'no-cache' })
     .then(res => {
       if (res && res.ok) cache.put(req.mode === 'navigate' ? new URL(req.url).pathname : req, res.clone());
       return res;
