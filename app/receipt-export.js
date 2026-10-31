@@ -432,19 +432,27 @@ async function shareReceiptIframe(iframeId, fileName) {
   // legacy/app/telegram.js's own (already working) html2canvas call uses
   // for this exact reason.
   const canvas = await html2canvas(target, { scale: 2, backgroundColor: '#ffffff', useCORS: true, allowTaint: true });
+  shareCanvasImage(canvas, fileName || 'articles-vendus', 'image/png');
+}
+
+// Hands a rendered canvas to the OS share sheet as an image file — PNG for
+// the receipts above, JPEG for page-recette.js's Recette & Charges table.
+// Shared so every Share button behaves the same way.
+function shareCanvasImage(canvas, baseName, mime) {
+  const ext = mime === 'image/jpeg' ? '.jpg' : '.png';
   canvas.toBlob(async blob => {
     if (!blob) return;
-    const file = new File([blob], (fileName || 'articles-vendus') + '.png', { type: 'image/png' });
+    const file = new File([blob], baseName + ext, { type: mime });
     if (navigator.canShare && navigator.canShare({ files: [file] })) {
       try { await navigator.share({ files: [file] }); return; }
       catch (e) { if (e && e.name === 'AbortError') return; }
     }
     // No file-capable Web Share on this browser (most desktop browsers) —
-    // download the PNG so the user can share it manually.
+    // download the image so the user can share it manually.
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url; a.download = file.name;
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 4000);
-  }, 'image/png');
+  }, mime, 0.92);
 }

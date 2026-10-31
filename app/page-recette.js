@@ -262,6 +262,7 @@ function renderRecette() {
   html += '</tr></thead><tbody>';
 
   let totalRec = 0, totalSal = 0, totalMarc = 0, totalOther = 0, totalBen = 0, activeDays = 0;
+  const exportRows = [];
   const byCharge = _charges.map(c => ({ id: c.id, name: c.name, total: 0 }));
   const dash = '<span class="rec-zero">—</span>';
   const cell = (v, cls = '') => `<td class="rec-td${cls}">${v > 0 ? _recFmt(v) : dash}</td>`;
@@ -292,6 +293,10 @@ function renderRecette() {
     totalRec += rec; totalSal += sal; totalMarc += marc; totalOther += other;
     totalBen += ben;
     if (rec > 0) activeDays++;
+    exportRows.push({
+      dayLabel, isToday, isWeekend, hasAny, rec, sal, marc, ben,
+      charges: _charges.map(c => (_chargeDays[c.id] || {})[dayKey] || 0),
+    });
 
     html += `<tr class="${trCls}">`;
     html += `<td class="rec-td-day">${dayLabel}</td>`;
@@ -324,5 +329,115 @@ function renderRecette() {
   document.getElementById('rec-sheet').innerHTML = html;
 
   _recSummaryState = { totalRec, totalSal, totalMarc, totalOther, byCharge, activeDays };
+  _recExportState = { label, rows: exportRows, totalBen };
   renderRecetteSummary();
+}
+
+// ── Share as JPEG ────────────────────────────────────────────────────────
+// The on-screen sheet can't be screenshotted as-is: it scrolls inside a
+// max-height box, has sticky cells, ✎/✕ buttons and <input> cells. So the
+// image is built from the numbers renderRecette() just computed, as a plain
+// static table in an off-screen node, then rasterized with html2canvas
+// (lazy-loaded by receipt-export.js) and handed to shareCanvasImage().
+// System fonts only — the page's Google Fonts are cross-origin and
+// html2canvas can silently drop them (see receipt-export.js).
+let _recExportState = null;
+
+function _recBuildExportHtml() {
+  const { label, rows, totalBen } = _recExportState;
+  const { totalRec, totalSal, totalMarc, totalOther, byCharge, activeDays } = _recSummaryState;
+  const { bizName, logoSrc } = _recBizIdentity();
+  const totalChg = totalSal + totalMarc + totalOther;
+  const net = totalRec - totalChg;
+  const margin = totalRec > 0 ? Math.round(net / totalRec * 100) : null;
+  const green = '#2e6b45', red = '#b3261e', dim = '#9a978c';
+  const th = 'padding:7px 9px;text-align:right;font-size:11px;letter-spacing:0.5px;text-transform:uppercase;color:#1f4a30;border-bottom:2px solid #1f4a30;white-space:nowrap;background:#f4f2ea;';
+  const td = 'padding:5px 9px;text-align:right;border-bottom:1px solid #ebe8de;white-space:nowrap;';
+  const num = v => v > 0 ? _recFmt(v) : `<span style="color:${dim}">—</span>`;
+
+  let head = `<th style="${th}text-align:left;">Jour</th><th style="${th}color:${green};">Recette</th>`
+    + `<th style="${th}">Salaires</th><th style="${th}">Marchandise</th>`
+    + _charges.map(c => `<th style="${th}">${_recEsc(c.name)}</th>`).join('')
+    + `<th style="${th}">Bénéfice</th>`;
+
+  const body = rows.map(r => {
+    const bg = r.isToday ? 'background:#fffbe8;' : '';
+    const ben = r.hasAny
+      ? `<td style="${td}${bg}font-weight:700;color:${r.ben >= 0 ? green : red};">${_recFmt(r.ben)}</td>`
+      : `<td style="${td}${bg}">${num(0)}</td>`;
+    return `<tr>
+      <td style="${td}${bg}text-align:left;font-weight:600;text-transform:capitalize;${r.isWeekend ? `color:${red};` : ''}">${r.dayLabel}</td>
+      <td style="${td}${bg}font-weight:700;color:${green};">${num(r.rec)}</td>
+      <td style="${td}${bg}">${num(r.sal)}</td>
+      <td style="${td}${bg}">${num(r.marc)}</td>
+      ${r.charges.map(a => `<td style="${td}${bg}">${num(a)}</td>`).join('')}
+      ${ben}
+    </tr>`;
+  }).join('');
+
+  const ft = 'padding:8px 9px;text-align:right;font-weight:700;border-top:2px solid #1f4a30;background:#f4f2ea;white-space:nowrap;';
+  const foot = `<tr>
+    <td style="${ft}text-align:left;text-transform:uppercase;">Total</td>
+    <td style="${ft}color:${green};">${_recFmt(totalRec)}</td>
+    <td style="${ft}">${_recFmt(totalSal)}</td>
+    <td style="${ft}">${_recFmt(totalMarc)}</td>
+    ${byCharge.map(c => `<td style="${ft}">${_recFmt(c.total)}</td>`).join('')}
+    <td style="${ft}color:${totalBen >= 0 ? green : red};">${_recFmt(totalBen)}</td>
+  </tr>`;
+
+  const tile = (t, v, sub) => `<div style="flex:1;min-width:120px;border:1px solid #e3e0d5;border-radius:8px;padding:8px 10px;">
+      <div style="font-size:10px;letter-spacing:1px;text-transform:uppercase;color:${dim};">${t}</div>
+      <div style="font-size:18px;font-weight:700;margin-top:2px;">${_recFmt(v)} <small style="font-size:11px;font-weight:400;">Dhs</small></div>
+      ${sub ? `<div style="font-size:10px;color:${dim};margin-top:2px;">${sub}</div>` : ''}
+    </div>`;
+  const pct = v => totalRec > 0 ? `${Math.round(v / totalRec * 100)}% de la recette` : '';
+
+  return `
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:4px;">
+      ${logoSrc ? `<img src="${logoSrc}" style="max-height:42px;max-width:110px;object-fit:contain;">` : ''}
+      <div>
+        <div style="font-size:18px;font-weight:800;letter-spacing:2px;">${_recEsc(bizName.toUpperCase())}</div>
+        <div style="font-size:13px;color:#555;">Recette & Charges — ${_recEsc(label)}</div>
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin:12px 0;">
+      ${tile('Recette', totalRec, activeDays ? `${activeDays} jours · moy. ${_recFmt(totalRec / activeDays)}/j` : '')}
+      ${tile('Salaires', totalSal, pct(totalSal))}
+      ${tile('Marchandise', totalMarc, pct(totalMarc))}
+      ${tile('Autres charges', totalOther, pct(totalOther))}
+    </div>
+    <div style="display:flex;justify-content:space-between;align-items:baseline;padding:9px 12px;border-radius:8px;margin-bottom:14px;color:#fff;background:${net >= 0 ? '#1f4a30' : '#8e2a20'};">
+      <span style="font-size:12px;letter-spacing:1.5px;text-transform:uppercase;">Bénéfice</span>
+      <span style="font-size:20px;font-weight:700;">${_recFmt(net)} Dhs${margin !== null ? `<small style="font-size:11px;font-weight:400;"> · marge ${margin}%</small>` : ''}</span>
+    </div>
+    <table style="border-collapse:collapse;width:100%;font-size:13px;">
+      <thead><tr>${head}</tr></thead>
+      <tbody>${body}</tbody>
+      <tfoot>${foot}</tfoot>
+    </table>
+    <div style="font-size:10px;color:${dim};text-align:right;margin-top:10px;">Généré le ${_recPrintedAt()} — ERPGEN Stats</div>`;
+}
+
+let _recSharing = false;
+async function shareRecetteImage() {
+  if (_recSharing || !_recExportState) return;
+  _recSharing = true;
+  const btn = document.getElementById('rec-share-btn');
+  if (btn) btn.disabled = true;
+  const node = document.createElement('div');
+  node.style.cssText = 'position:fixed;left:-10000px;top:0;width:max-content;min-width:560px;padding:20px;background:#fff;color:#222;font-family:Arial,Helvetica,sans-serif;font-variant-numeric:tabular-nums;';
+  try {
+    await _ensureHtml2canvas();
+    node.innerHTML = _recBuildExportHtml();
+    document.body.appendChild(node);
+    const canvas = await html2canvas(node, { scale: 2, backgroundColor: '#ffffff', useCORS: true, allowTaint: true });
+    const slug = _recExportState.label.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\s+/g, '-');
+    shareCanvasImage(canvas, 'recette-charges-' + slug, 'image/jpeg');
+  } catch (e) {
+    console.error('[recette] share failed', e);
+  } finally {
+    node.remove();
+    if (btn) btn.disabled = false;
+    _recSharing = false;
+  }
 }
